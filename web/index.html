@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#11151c">
+<title>HA-Panel</title>
+<style>
+:root{--bg:#0e1116;--card:#171c24;--card2:#1f2530;--line:#2a3140;--fg:#e6e9ef;--mut:#8b93a3;--acc:#03a9f4;--acc2:#0288d1;--ok:#2ecc71;--warn:#f1c40f;--err:#e74c3c;--r:12px}
+@media (prefers-color-scheme:light){:root{--bg:#f2f4f7;--card:#fff;--card2:#f5f7fa;--line:#dde2ea;--fg:#1b2230;--mut:#687385}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+a{color:var(--acc)}
+header{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top{display:flex;align-items:center;gap:12px;padding:10px 16px;max-width:1100px;margin:auto}
+.logo{font-weight:700;font-size:18px;display:flex;align-items:center;gap:8px}
+.logo i{display:inline-block;width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#03a9f4,#8e44ad)}
+.chips{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+.chip{font-size:12px;padding:3px 9px;border-radius:99px;background:var(--card2);border:1px solid var(--line);color:var(--mut);white-space:nowrap}
+.chip.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 40%,transparent)}
+.chip.err{color:var(--err);border-color:color-mix(in srgb,var(--err) 40%,transparent)}
+nav{display:flex;gap:4px;padding:0 12px 8px;max-width:1100px;margin:auto;overflow-x:auto}
+nav button{background:none;border:0;color:var(--mut);padding:7px 12px;border-radius:8px;font:inherit;cursor:pointer;white-space:nowrap}
+nav button.act{background:var(--card2);color:var(--fg)}
+main{max-width:1100px;margin:auto;padding:16px}
+section.tab{display:none}section.tab.act{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:16px}
+.card h2{margin:0 0 12px;font-size:16px}
+.card h3{margin:16px 0 8px;font-size:14px;color:var(--mut);font-weight:600}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.row>*{flex:1 1 auto}
+label.f{display:block;margin:0 0 10px}
+label.f>span{display:block;font-size:12px;color:var(--mut);margin-bottom:4px}
+input,select,textarea{width:100%;background:var(--card2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit}
+textarea{font-family:ui-monospace,Consolas,monospace;font-size:13px;min-height:64px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--acc);outline-offset:-1px}
+input[type=color]{padding:2px;height:38px;min-width:48px}
+input[type=range]{padding:0;accent-color:var(--acc)}
+input[type=checkbox]{width:auto;accent-color:var(--acc)}
+.sw{display:flex;align-items:center;gap:10px;margin:0 0 10px;cursor:pointer;user-select:none}
+.sw input{display:none}
+.sw i{width:40px;height:22px;border-radius:99px;background:var(--line);position:relative;flex:none;transition:.2s}
+.sw i:after{content:"";position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.2s}
+.sw input:checked+i{background:var(--acc)}
+.sw input:checked+i:after{left:21px}
+.b{background:var(--card2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 14px;font:inherit;cursor:pointer}
+.b:hover{border-color:var(--acc)}
+.b.p{background:var(--acc);border-color:var(--acc);color:#fff}
+.b.p:hover{background:var(--acc2)}
+.b.d{color:var(--err)}
+.b.s{padding:4px 9px;font-size:13px}
+.mut{color:var(--mut);font-size:13px}
+.hint{color:var(--mut);font-size:12px;margin:-4px 0 10px}
+code,.mono{font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+pre{background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:10px;overflow:auto;font-size:12.5px}
+#preview{width:100%;display:block;background:#050608;border-radius:10px;image-rendering:pixelated}
+.pvwrap{background:#050608;border-radius:12px;padding:10px;border:1px solid var(--line)}
+.ctl{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px}
+.kv b{color:var(--mut);font-weight:500}
+.pages{display:flex;flex-direction:column;gap:8px}
+.pg{display:flex;align-items:center;gap:10px;background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.pg.off{opacity:.5}
+.pg .nm{font-weight:600}
+.pg .inf{flex:1;min-width:0}
+.pg .inf div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pg .val{font-family:ui-monospace,monospace;font-size:12px;color:var(--acc)}
+.badge{font-size:11px;padding:1px 7px;border-radius:99px;background:var(--line);color:var(--fg);margin-left:6px;font-weight:500}
+.cur{outline:2px solid var(--acc)}
+canvas.ic{width:32px;height:32px;image-rendering:pixelated;background:#000;border-radius:4px;flex:none}
+.icons{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:8px}
+.icon{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;background:var(--card2);border:1px solid var(--line);border-radius:10px;cursor:pointer;font-size:11px;text-align:center;word-break:break-all}
+.icon:hover,.icon.sel{border-color:var(--acc)}
+.icon canvas{width:40px;height:40px}
+.icon.custom:after{content:"vlastní";font-size:9px;color:var(--acc)}
+#ed{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;background:var(--line);padding:2px;border-radius:8px;width:min(100%,360px);aspect-ratio:1;touch-action:none;user-select:none}
+#ed div{background:#000;border-radius:2px}
+.pal{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0}
+.pal i{width:24px;height:24px;border-radius:5px;border:1px solid var(--line);cursor:pointer;display:block}
+.pal i.sel{outline:2px solid var(--acc)}
+.frames{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.frames canvas{width:40px;height:40px;border:2px solid var(--line);border-radius:6px;cursor:pointer;image-rendering:pixelated}
+.frames canvas.sel{border-color:var(--acc)}
+.tools{display:flex;gap:6px;flex-wrap:wrap}
+.tools button.act{background:var(--acc);color:#fff;border-color:var(--acc)}
+dialog{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:14px;padding:0;width:min(720px,96vw);max-height:92vh}
+dialog::backdrop{background:#0009}
+dialog .hd{display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);z-index:2}
+dialog .hd h2{margin:0;font-size:16px;flex:1}
+dialog .bd{padding:16px}
+dialog .ft{display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--line);position:sticky;bottom:0;background:var(--card)}
+details{border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin:10px 0}
+details summary{cursor:pointer;font-weight:600;font-size:14px}
+.tres{font-family:ui-monospace,monospace;font-size:12px;background:var(--card2);border-radius:6px;padding:6px 8px;margin:-4px 0 10px;white-space:pre-wrap;display:none}
+.tres.err{color:var(--err)}
+.ipick{display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:4px 10px 4px 4px;min-height:38px}
+.ipick canvas{width:28px;height:28px}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--card2);border:1px solid var(--line);padding:10px 16px;border-radius:10px;box-shadow:0 8px 30px #0006;opacity:0;transition:.25s;pointer-events:none;z-index:99}
+#toast.show{opacity:1}
+#toast.err{border-color:var(--err)}
+.bar{height:8px;background:var(--line);border-radius:99px;overflow:hidden}.bar i{display:block;height:100%;width:0;background:var(--acc);transition:.2s}
+.presets{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.presets button{text-align:left}
+.presets small{display:block;color:var(--mut);font-size:11px}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{border-bottom:1px solid var(--line);padding:6px;text-align:left;vertical-align:top}
+@media (max-width:600px){main{padding:10px}.card{padding:12px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <div class="logo"><i></i><span id="devname">HA-Panel</span></div>
+    <div class="chips">
+      <span class="chip" id="c-wifi">WiFi</span>
+      <span class="chip" id="c-ha">HA</span>
+      <span class="chip" id="c-mqtt">MQTT</span>
+    </div>
+  </div>
+  <nav id="nav">
+    <button data-t="dash" class="act">Přehled</button>
+    <button data-t="pages">Stránky</button>
+    <button data-t="icons">Ikony</button>
+    <button data-t="settings">Nastavení</button>
+    <button data-t="system">Systém</button>
+    <button data-t="help">Nápověda &amp; API</button>
+  </nav>
+</header>
+
+<main>
+<!-- ============================================================ DASHBOARD -->
+<section class="tab act" id="t-dash">
+  <div class="card">
+    <div class="pvwrap"><canvas id="preview" width="640" height="160"></canvas></div>
+    <div class="ctl">
+      <button class="b" id="b-prev" title="Předchozí">◀</button>
+      <button class="b" id="b-sel" title="Akce stránky / zavřít notifikaci">●</button>
+      <button class="b" id="b-next" title="Další">▶</button>
+      <button class="b" id="b-power">⏻ Vypnout</button>
+      <button class="b" id="b-test">Testovací obrazec</button>
+      <span class="mut" id="curpage" style="align-self:center"></span>
+    </div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <h2>Ovládání</h2>
+      <label class="f"><span>Jas <b id="brv"></b></span><input type="range" min="1" max="255" id="c-bright"></label>
+      <label class="sw"><input type="checkbox" id="c-autob"><i></i>Automatický jas (čidlo světla)</label>
+      <label class="sw"><input type="checkbox" id="c-rot"><i></i>Automatické přepínání stránek</label>
+      <label class="sw"><input type="checkbox" id="c-night"><i></i>Noční režim (podle času)</label>
+      <label class="f"><span>Výchozí barva textu</span><input type="color" id="c-color"></label>
+    </div>
+    <div class="card">
+      <h2>Rychlá notifikace</h2>
+      <label class="f"><span>Text</span><input id="n-text" placeholder="Ahoj světe!"></label>
+      <div class="row">
+        <label class="f"><span>Ikona</span><div class="ipick" id="n-icon" data-value=""></div></label>
+        <label class="f" style="flex:0 0 70px"><span>Barva</span><input type="color" id="n-color" value="#ffffff"></label>
+        <label class="f" style="flex:0 0 90px"><span>Délka (s)</span><input type="number" id="n-dur" value="5" min="1"></label>
+      </div>
+      <div class="row">
+        <label class="sw"><input type="checkbox" id="n-rain"><i></i>Duha</label>
+        <label class="sw"><input type="checkbox" id="n-hold"><i></i>Držet</label>
+        <label class="sw"><input type="checkbox" id="n-wake"><i></i>Probudit</label>
+      </div>
+      <div class="row"><button class="b p" id="n-send">Odeslat</button><button class="b" id="n-dis">Zavřít aktuální</button></div>
+    </div>
+    <div class="card">
+      <h2>Stav</h2>
+      <div class="kv" id="stat"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ PAGES -->
+<section class="tab" id="t-pages">
+  <div class="card">
+    <div class="row" style="margin-bottom:12px">
+      <h2 style="margin:0">Stránky</h2>
+      <span class="mut">Pořadí = pořadí zobrazení. Hodnoty z HA se aktualizují živě.</span>
+      <button class="b p" id="pg-add" style="flex:0 0 auto">+ Přidat stránku</button>
+    </div>
+    <div class="pages" id="pglist"></div>
+  </div>
+  <div class="card">
+    <h2>Dynamické stránky (MQTT / API)</h2>
+    <p class="mut">Stránky poslané z automatizací přes <code>&lt;topic&gt;/custom/&lt;název&gt;</code> nebo <code>POST /api/custom?name=</code>.</p>
+    <div id="customlist" class="mut">–</div>
+  </div>
+</section>
+
+<!-- ============================================================ ICONS -->
+<section class="tab" id="t-icons">
+  <div class="grid">
+    <div class="card">
+      <h2>Editor ikon 8×8</h2>
+      <div class="row">
+        <label class="f"><span>Název (a-z, 0-9, _ -)</span><input id="ie-name" placeholder="moje_ikona"></label>
+        <label class="f" style="flex:0 0 120px"><span>Snímek (ms)</span><input type="number" id="ie-delay" value="250" min="20"></label>
+      </div>
+      <div id="ed"></div>
+      <div class="pal" id="ie-pal"></div>
+      <div class="row">
+        <label class="f" style="flex:0 0 70px"><span>Barva</span><input type="color" id="ie-color" value="#ffcc00"></label>
+        <div class="tools" id="ie-tools">
+          <button class="b s act" data-tool="pen">✏️ Kreslit</button>
+          <button class="b s" data-tool="erase">🧽 Guma</button>
+          <button class="b s" data-tool="fill">🪣 Výplň</button>
+          <button class="b s" data-tool="pick">💧 Kapátko</button>
+        </div>
+      </div>
+      <div class="tools" style="margin-top:8px">
+        <button class="b s" data-op="left">←</button><button class="b s" data-op="right">→</button>
+        <button class="b s" data-op="up">↑</button><button class="b s" data-op="down">↓</button>
+        <button class="b s" data-op="flipx">⇋</button><button class="b s" data-op="flipy">⇵</button>
+        <button class="b s" data-op="clear">Vymazat</button>
+      </div>
+      <h3>Snímky animace</h3>
+      <div class="frames" id="ie-frames"></div>
+      <div class="tools">
+        <button class="b s" id="ie-fadd">+ Snímek</button>
+        <button class="b s" id="ie-fdup">Duplikovat</button>
+        <button class="b s d" id="ie-fdel">Smazat snímek</button>
+        <label class="b s" style="cursor:pointer">Import obrázku<input type="file" id="ie-import" accept="image/*" hidden></label>
+        <button class="b s" id="ie-export">Export PNG</button>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <canvas class="ic" id="ie-anim" width="8" height="8" style="width:48px;height:48px;flex:0 0 48px"></canvas>
+        <button class="b p" id="ie-save">Uložit do zařízení</button>
+        <button class="b" id="ie-show">Zobrazit na displeji</button>
+        <button class="b" id="ie-new">Nová</button>
+      </div>
+      <p class="hint" style="margin-top:10px">Import: PNG 8×8, nebo pás 8N×8 (každý čtverec = snímek). Jiné rozměry se zmenší na 8×8.</p>
+    </div>
+    <div class="card">
+      <div class="row"><h2 style="margin:0">Knihovna ikon</h2><input id="ic-filter" placeholder="Hledat…" style="flex:0 1 180px"></div>
+      <p class="hint" style="margin-top:8px">Klikni pro načtení do editoru. Vestavěné ikony lze upravit a uložit pod novým názvem. Počasí: ikony se jmenují jako stavy HA (sunny, rainy, …).</p>
+      <div class="icons" id="iclib"></div>
+      <div class="row" style="margin-top:10px"><button class="b d" id="ie-del">Smazat vybranou vlastní ikonu</button></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ SETTINGS -->
+<section class="tab" id="t-settings">
+  <div class="grid">
+    <form class="card" data-form>
+      <h2>Wi-Fi</h2>
+      <div class="row">
+        <label class="f"><span>SSID</span><input name="net.ssid" list="ssids" autocomplete="off"></label>
+        <button type="button" class="b s" id="scan" style="flex:0 0 auto;margin-top:8px">Hledat sítě</button>
+      </div>
+      <datalist id="ssids"></datalist>
+      <label class="f"><span>Heslo</span><input name="net.pass" type="password" autocomplete="new-password"></label>
+      <label class="f"><span>Název zařízení (hostname / mDNS)</span><input name="net.hostname"></label>
+      <label class="sw"><input type="checkbox" name="net.static"><i></i>Statická IP</label>
+      <div class="row">
+        <label class="f"><span>IP</span><input name="net.ip" placeholder="192.168.1.50"></label>
+        <label class="f"><span>Brána</span><input name="net.gateway"></label>
+      </div>
+      <div class="row">
+        <label class="f"><span>Maska</span><input name="net.subnet"></label>
+        <label class="f"><span>DNS</span><input name="net.dns"></label>
+      </div>
+      <button class="b p">Uložit</button> <span class="mut">Vyžaduje restart.</span>
+    </form>
+
+    <form class="card" data-form>
+      <h2>Home Assistant</h2>
+      <label class="sw"><input type="checkbox" name="ha.enabled"><i></i>Připojit k Home Assistantu</label>
+      <label class="f"><span>URL</span><input name="ha.url" placeholder="http://homeassistant.local:8123"></label>
+      <label class="f"><span>Long-lived access token</span><textarea name="ha.token" rows="3" placeholder="Profil → Zabezpečení → Dlouhodobé přístupové tokeny"></textarea></label>
+      <p class="hint">Panel se připojí přes WebSocket API a odebírá šablony – hodnoty se mění okamžitě bez dotazování.</p>
+      <div class="kv" id="ha-stat" style="margin-bottom:10px"></div>
+      <button class="b p">Uložit</button>
+    </form>
+
+    <form class="card" data-form>
+      <h2>MQTT (entity v HA)</h2>
+      <label class="sw"><input type="checkbox" name="mqtt.enabled"><i></i>Povolit MQTT</label>
+      <div class="row">
+        <label class="f"><span>Broker</span><input name="mqtt.host" placeholder="192.168.1.10"></label>
+        <label class="f" style="flex:0 0 90px"><span>Port</span><input type="number" name="mqtt.port"></label>
+      </div>
+      <div class="row">
+        <label class="f"><span>Uživatel</span><input name="mqtt.user" autocomplete="off"></label>
+        <label class="f"><span>Heslo</span><input type="password" name="mqtt.pass" autocomplete="new-password"></label>
+      </div>
+      <label class="f"><span>Základní topic</span><input name="mqtt.topic"></label>
+      <label class="sw"><input type="checkbox" name="mqtt.discovery"><i></i>Home Assistant auto-discovery</label>
+      <label class="f"><span>Discovery prefix</span><input name="mqtt.prefix"></label>
+      <button class="b p">Uložit</button>
+    </form>
+
+    <form class="card" data-form>
+      <h2>Zobrazení</h2>
+      <label class="f"><span>Rychlost posunu textu (px/s)</span><input type="number" name="display.scroll_speed" min="5" max="120"></label>
+      <div class="row">
+        <label class="f"><span>Přechod mezi stránkami</span>
+          <select name="display.transition" data-num><option value="0">Žádný</option><option value="1">Posun do strany</option><option value="2">Posun nahoru</option><option value="3">Prolínání</option></select></label>
+        <label class="f" style="flex:0 0 110px"><span>Délka (ms)</span><input type="number" name="display.transition_ms" min="50" max="3000"></label>
+      </div>
+      <label class="f"><span>Svislá pozice textu (řádek 0–3)</span><input type="number" name="display.text_y" min="0" max="3"></label>
+      <label class="sw"><input type="checkbox" name="display.auto_rotate"><i></i>Automaticky přepínat stránky</label>
+      <label class="sw"><input type="checkbox" name="display.uppercase"><i></i>Text velkými písmeny</label>
+      <label class="f"><span>Výchozí barva textu</span><input type="color" name="display.text_color"></label>
+      <button class="b p">Uložit</button>
+    </form>
+
+    <form class="card" data-form>
+      <h2>Matice LED (hardware)</h2>
+      <label class="f"><span>Předvolba</span>
+        <select id="hwpreset"><option value="">— vyber —</option><option value="flex">Flexibilní panel 8×32 (WS2812B, sloupce, had)</option><option value="rows">Panel po řádcích (had)</option><option value="ulanzi">Ulanzi TC001 / AWTRIX hodiny</option></select></label>
+      <div class="row">
+        <label class="f"><span>Datový pin (GPIO)</span><input type="number" name="matrix.pin"></label>
+        <label class="f"><span>Šířka</span><input type="number" name="matrix.width" min="8" max="128"></label>
+        <label class="f"><span>Výška</span><input type="number" name="matrix.height" min="8" max="32"></label>
+      </div>
+      <label class="sw"><input type="checkbox" name="matrix.vertical"><i></i>Zapojeno po sloupcích (typické pro 8×32)</label>
+      <label class="sw"><input type="checkbox" name="matrix.serpentine"><i></i>Hadovité zapojení (cik-cak)</label>
+      <label class="sw"><input type="checkbox" name="matrix.start_right"><i></i>První LED vpravo</label>
+      <label class="sw"><input type="checkbox" name="matrix.start_bottom"><i></i>První LED dole</label>
+      <div class="row">
+        <label class="f"><span>Pořadí barev</span><select name="matrix.order"><option>GRB</option><option>RGB</option><option>BRG</option><option>RBG</option><option>GBR</option><option>BGR</option></select></label>
+        <label class="f"><span>Limit proudu (mA, 0 = bez)</span><input type="number" name="matrix.max_current" min="0" step="100"></label>
+      </div>
+      <label class="sw"><input type="checkbox" name="matrix.gamma"><i></i>Gama korekce (věrnější barvy)</label>
+      <p class="hint">Testovací obrazec: <b style="color:#f33">červená</b> = vlevo nahoře, <b style="color:#3f3">zelená</b> = vpravo nahoře, <b style="color:#39f">modrá</b> = vlevo dole, bílá = vpravo dole. Pin, rozměr a pořadí barev se projeví po restartu.</p>
+      <div class="row"><button class="b p">Uložit</button><button type="button" class="b" data-act="test">Testovací obrazec</button></div>
+    </form>
+
+    <form class="card" data-form>
+      <h2>Automatický jas</h2>
+      <label class="sw"><input type="checkbox" name="display.auto_bright"><i></i>Řídit jas čidlem světla (LDR/fotorezistor)</label>
+      <label class="f"><span>Pin čidla (ADC1: ESP32 32–39, S3 1–10; −1 = není)</span><input type="number" name="display.ldr_pin"></label>
+      <label class="sw"><input type="checkbox" name="display.ldr_invert"><i></i>Invertovat čidlo</label>
+      <div class="row">
+        <label class="f"><span>Min. jas</span><input type="number" name="display.min_bright" min="1" max="255"></label>
+        <label class="f"><span>Max. jas</span><input type="number" name="display.max_bright" min="1" max="255"></label>
+      </div>
+      <p class="hint">Aktuální hodnota čidla: <b id="ldrraw">–</b> / 4095</p>
+      <button class="b p">Uložit</button>
+    </form>
+
+    <form class="card" data-form>
+      <h2>Čas a datum</h2>
+      <label class="f"><span>Časové pásmo</span><select id="tzsel"></select></label>
+      <label class="f"><span>POSIX TZ řetězec</span><input name="time.tz"></label>
+      <label class="f"><span>NTP server</span><input name="time.ntp"></label>
+      <label class="sw"><input type="checkbox" name="time.h24"><i></i>24hodinový formát</label>
+      <label class="sw"><input type="checkbox" name="time.seconds"><i></i>Sekundy (malé hodiny)</label>
+      <label class="sw"><input type="checkbox" name="time.blink"><i></i>Blikající dvojtečka</label>
+      <label class="sw"><input type="checkbox" name="time.weekday_bar"><i></i>Pruh dní v týdnu</label>
+      <label class="sw"><input type="checkbox" name="time.monday_first"><i></i>Týden začíná pondělím</label>
+      <div class="row">
+        <label class="f"><span>Formát data</span><select name="time.date_format" data-num><option value="0">31.12.</option><option value="1">31.12.26</option><option value="2">12/31</option><option value="3">2026-12-31</option><option value="4">31.12. (bez nul)</option></select></label>
+        <label class="f" style="flex:0 0 70px"><span>Dny</span><input type="color" name="time.weekday_color"></label>
+        <label class="f" style="flex:0 0 70px"><span>Dnes</span><input type="color" name="time.weekday_active"></label>
+      </div>
+      <button class="b p">Uložit</button>
+    </form>
+
+    <form class="card" data-form>
+      <h2>Noční režim</h2>
+      <label class="sw"><input type="checkbox" name="night.enabled"><i></i>Zapnout noční režim</label>
+      <div class="row">
+        <label class="f"><span>Od</span><input type="time" name="night.start"></label>
+        <label class="f"><span>Do</span><input type="time" name="night.end"></label>
+        <label class="f"><span>Jas</span><input type="number" name="night.brightness" min="0" max="255"></label>
+      </div>
+      <label class="sw"><input type="checkbox" name="night.clock_only"><i></i>V noci zobrazovat jen hodiny</label>
+      <label class="sw"><input type="checkbox" id="nightcol-on"><i></i>Přebarvit text v noci</label>
+      <label class="f"><span>Noční barva</span><input type="color" name="night.color"></label>
+      <button class="b p">Uložit</button>
+    </form>
+
+    <form class="card" data-form>
+      <h2>Tlačítka</h2>
+      <p class="hint">Vlevo = předchozí (dlouze: jas −), střed = akce stránky / zavřít notifikaci (dlouze: vypnout/zapnout), vpravo = další (dlouze: jas +). −1 = nepoužito.</p>
+      <div class="row">
+        <label class="f"><span>Levé GPIO</span><input type="number" name="buttons.pins.0"></label>
+        <label class="f"><span>Prostřední GPIO</span><input type="number" name="buttons.pins.1"></label>
+        <label class="f"><span>Pravé GPIO</span><input type="number" name="buttons.pins.2"></label>
+      </div>
+      <label class="sw"><input type="checkbox" name="buttons.active_low"><i></i>Aktivní v nule (tlačítko proti GND, interní pull-up)</label>
+      <button class="b p">Uložit</button> <span class="mut">Vyžaduje restart.</span>
+    </form>
+
+    <form class="card" data-form>
+      <h2>Indikátory (pravý okraj)</h2>
+      <p class="hint">HA šablona vracející barvu (<code>#FF0000</code>, <code>red</code>, <code>255,0,0</code>) nebo prázdný text = zhasnuto. Např. <code>{{ 'red' if is_state('binary_sensor.dvere','on') }}</code></p>
+      <label class="f"><span>1 – vpravo nahoře</span><textarea name="indicators.0" rows="2"></textarea></label>
+      <label class="f"><span>2 – vpravo uprostřed</span><textarea name="indicators.1" rows="2"></textarea></label>
+      <label class="f"><span>3 – vpravo dole</span><textarea name="indicators.2" rows="2"></textarea></label>
+      <button class="b p">Uložit</button>
+    </form>
+
+    <form class="card" data-form>
+      <h2>Zabezpečení</h2>
+      <label class="f"><span>Uživatel webu</span><input name="net.web_user" autocomplete="off"></label>
+      <label class="f"><span>Heslo webu (prázdné = bez hesla)</span><input type="password" name="net.web_pass" autocomplete="new-password"></label>
+      <label class="f"><span>Heslo Wi-Fi AP (min. 8 znaků)</span><input type="password" name="net.ap_pass" autocomplete="new-password"></label>
+      <button class="b p">Uložit</button>
+    </form>
+  </div>
+</section>
+
+<!-- ============================================================ SYSTEM -->
+<section class="tab" id="t-system">
+  <div class="grid">
+    <div class="card"><h2>Zařízení</h2><div class="kv" id="sysinfo"></div></div>
+    <div class="card">
+      <h2>Aktualizace firmwaru</h2>
+      <p class="mut">Nahraj soubor <code>firmware.bin</code> (PlatformIO: <code>.pio/build/&lt;env&gt;/firmware.bin</code>).</p>
+      <input type="file" id="fw" accept=".bin">
+      <div class="bar" style="margin:12px 0"><i id="fwbar"></i></div>
+      <button class="b p" id="fwup">Nahrát a restartovat</button>
+    </div>
+    <div class="card">
+      <h2>Záloha a obnova</h2>
+      <p class="mut">Záloha obsahuje nastavení (včetně hesel a tokenu!), stránky a vlastní ikony.</p>
+      <div class="row">
+        <button class="b" id="bk-down">Stáhnout zálohu</button>
+        <label class="b" style="cursor:pointer;text-align:center">Obnovit ze zálohy<input type="file" id="bk-up" accept=".json" hidden></label>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Údržba</h2>
+      <div class="row">
+        <button class="b" id="reboot">Restartovat</button>
+        <button class="b d" id="freset">Tovární nastavení</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ HELP -->
+<section class="tab" id="t-help">
+  <div class="card">
+    <h2>Typy stránek</h2>
+    <table>
+      <tr><th>Typ</th><th>Popis</th></tr>
+      <tr><td>Hodiny</td><td>Malé nebo velké číslice, pruh dní v týdnu, volitelně ikona a efekt v pozadí.</td></tr>
+      <tr><td>Datum</td><td>Datum s automatickou ikonou kalendáře (dnešní den).</td></tr>
+      <tr><td>Entita HA</td><td>Stav entity + jednotka; volitelně zaokrouhlení. Nejrychlejší způsob.</td></tr>
+      <tr><td>Šablona HA</td><td>Libovolná Jinja šablona, např. <code>{{ states('sensor.a') }}/{{ states('sensor.b') }}</code>.</td></tr>
+      <tr><td>Text</td><td>Pevný text (dlouhý text se posouvá).</td></tr>
+      <tr><td>Efekt</td><td>Animace (duha, oheň, plasma, matrix…) s volitelným textem.</td></tr>
+    </table>
+    <p class="mut">Každá stránka může mít šablony pro <b>barvu</b>, <b>ikonu</b>, <b>viditelnost</b> (stránka se zobrazí jen když vrací <code>true</code>) a <b>průběh</b> (0–100 → pruh dole). Stisk prostředního tlačítka může přepnout entitu nebo zavolat službu.</p>
+  </div>
+  <div class="card">
+    <h2>MQTT</h2>
+    <p class="mut">Základní topic: <code class="bt">hapanel/xxxxxx</code>. Při zapnutém auto-discovery se v HA objeví zařízení s entitami: světlo (zap/vyp, jas, barva, efekty), výběr stránky, přepínače, tlačítka, notify, senzory.</p>
+    <table>
+      <tr><th>Topic</th><th>Payload</th></tr>
+      <tr><td><code>…/notify</code></td><td>Text nebo JSON <code>{"text":"Ahoj","icon":"bell","color":"#ff0000","duration":5,"repeat":2,"rainbow":true,"hold":false,"wakeup":true,"progress":40,"stack":true}</code></td></tr>
+      <tr><td><code>…/custom/&lt;název&gt;</code></td><td>Dynamická stránka <code>{"text":"22°","icon":"thermometer","color":"orange","progress":50,"duration":6,"lifetime":600}</code>, prázdný payload = smazat</td></tr>
+      <tr><td><code>…/indicator1</code> (2, 3)</td><td><code>{"color":"#ff0000","blink":500,"lifetime":60}</code> nebo <code>red</code>, prázdné = vypnout</td></tr>
+      <tr><td><code>…/cmd</code></td><td><code>next</code>, <code>prev</code>, <code>select</code>, <code>dismiss</code>, <code>restart</code></td></tr>
+      <tr><td><code>…/page/set</code></td><td>Název stránky</td></tr>
+      <tr><td><code>…/power</code></td><td><code>ON</code> / <code>OFF</code> / <code>TOGGLE</code></td></tr>
+      <tr><td><code>…/brightness/set</code></td><td>1–255</td></tr>
+      <tr><td><code>…/light/set</code></td><td>JSON světla HA (<code>state</code>, <code>brightness</code>, <code>color</code>, <code>effect</code>)</td></tr>
+      <tr><td><code>…/sensor</code></td><td>(stav) RSSI, uptime, proud, světlo…</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h2>HTTP API</h2>
+    <table>
+      <tr><td><code>POST /api/notify</code></td><td>JSON jako u MQTT notify</td></tr>
+      <tr><td><code>POST /api/custom?name=x</code></td><td>Dynamická stránka (JSON), <code>DELETE</code> = smazat</td></tr>
+      <tr><td><code>POST /api/indicator?n=1</code></td><td>Indikátor</td></tr>
+      <tr><td><code>POST /api/control</code></td><td><code>{"power":true,"brightness":80,"next":true,"page":"Hodiny","auto_rotate":false}</code></td></tr>
+      <tr><td><code>POST /api/dismiss</code></td><td>Zavřít notifikaci</td></tr>
+      <tr><td><code>GET /api/status</code>, <code>/api/config</code>, <code>/api/pages</code></td><td>Stav a konfigurace</td></tr>
+      <tr><td><code>GET /api/frame</code></td><td>Aktuální snímek (RGB, řádek po řádku)</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h2>Příklady pro Home Assistant</h2>
+    <p class="mut">Notifikace z automatizace (MQTT):</p>
+<pre>action: mqtt.publish
+data:
+  topic: <span class="bt">hapanel/xxxxxx</span>/notify
+  payload: >
+    {"text": "Pračka dokončila", "icon": "washer", "color": "#00ff00", "repeat": 2, "wakeup": true}</pre>
+    <p class="mut">Notifikace přes entitu notify (auto-discovery):</p>
+<pre>action: notify.send_message
+target:
+  entity_id: notify.<span class="hn">hapanel</span>_notifikace
+data:
+  message: "Někdo zvoní!"</pre>
+    <p class="mut">Bez MQTT – REST příkaz (<code>configuration.yaml</code>):</p>
+<pre>rest_command:
+  hapanel_notify:
+    url: "http://<span class="ip">IP</span>/api/notify"
+    method: POST
+    content_type: "application/json"
+    payload: '{"text": "{{ text }}", "icon": "{{ icon | default("bell") }}"}'</pre>
+    <p class="mut">Užitečné šablony:</p>
+<pre>{{ states('sensor.venku_teplota') | float | round(1) }}°
+{{ states('weather.forecast_home') }}                       ← jako šablona ikony (sunny, rainy…)
+{{ '#ff4000' if states('sensor.spotreba')|float > 3000 else '#ffffff' }}   ← barva
+{{ is_state('binary_sensor.pracka', 'on') }}                 ← viditelnost
+{{ state_attr('sensor.telefon', 'battery_level') }}          ← průběh 0–100
+{{ (states('sensor.fve_vykon')|float / 10000 * 100) | int }}  ← průběh výkonu FVE</pre>
+  </div>
+</section>
+</main>
+
+<!-- ============================================================ DIALOGS -->
+<dialog id="dlg-page">
+  <form method="dialog" id="pgform">
+    <button value="save" hidden></button>
+    <div class="hd"><h2 id="pg-title">Stránka</h2><button class="b s" value="cancel">✕</button></div>
+    <div class="bd">
+      <div class="row">
+        <label class="f"><span>Název</span><input name="name" required></label>
+        <label class="f"><span>Typ</span><select name="type" id="pg-type">
+          <option value="clock">Hodiny</option><option value="date">Datum</option><option value="entity">Entita HA</option>
+          <option value="template">Šablona HA</option><option value="text">Text</option><option value="effect">Efekt</option></select></label>
+      </div>
+      <div class="row">
+        <label class="sw" style="flex:0 0 auto"><input type="checkbox" name="enabled"><i></i>Povoleno</label>
+        <label class="f" style="flex:0 0 120px"><span>Doba (s)</span><input type="number" name="duration" min="1" max="3600"></label>
+      </div>
+
+      <div data-for="clock">
+        <label class="f"><span>Styl hodin</span><select name="style" data-num><option value="1">Velké číslice (4×7)</option><option value="0">Malé číslice (3×5)</option></select></label>
+      </div>
+      <div data-for="entity">
+        <label class="f"><span>Entita</span><input name="entity" list="entities" placeholder="sensor.obyvak_teplota" autocomplete="off"></label>
+        <p class="hint" id="ent-hint">Začni psát – seznam entit se načte z HA.</p>
+        <div class="row">
+          <label class="f"><span>Desetinná místa (−1 = beze změny)</span><input type="number" name="decimals" min="-1" max="4"></label>
+          <label class="f"><span>Jednotka (prázdné = z HA, "-" = žádná)</span><input name="unit" placeholder="°C"></label>
+        </div>
+      </div>
+      <div data-for="template">
+        <label class="f"><span>Šablona textu (Jinja)</span><textarea name="text" rows="3" data-tpl placeholder="{{ states('sensor.x') }}"></textarea></label>
+        <div class="tres"></div>
+      </div>
+      <div data-for="text">
+        <label class="f"><span>Text</span><input name="text"></label>
+      </div>
+      <div data-for="effect">
+        <label class="f"><span>Text přes efekt (volitelně)</span><input name="text"></label>
+      </div>
+
+      <div class="row">
+        <label class="f"><span>Ikona</span><div class="ipick" id="pg-icon" data-value=""></div></label>
+        <label class="f" style="flex:0 0 auto"><span>Vlastní barva</span><label class="sw" style="margin:6px 0"><input type="checkbox" name="color_on"><i></i></label></label>
+        <label class="f" style="flex:0 0 70px"><span>Barva</span><input type="color" name="color"></label>
+      </div>
+      <div class="row">
+        <label class="f"><span id="fx-label">Efekt v pozadí</span><select name="effect" id="pg-fx"></select></label>
+        <label class="sw" style="flex:0 0 auto;margin-top:14px"><input type="checkbox" name="rainbow"><i></i>Duhový text</label>
+      </div>
+
+      <details>
+        <summary>Pokročilé – šablony HA</summary>
+        <p class="hint" style="margin-top:8px">Šablony se vyhodnocují v Home Assistantu a aktualizují se okamžitě při změně stavu.</p>
+        <label class="f"><span>Barva textu (vrací #RRGGBB / název / r,g,b)</span><textarea name="color_tpl" rows="2" data-tpl></textarea></label><div class="tres"></div>
+        <label class="f"><span>Ikona (vrací název ikony)</span><textarea name="icon_tpl" rows="2" data-tpl></textarea></label><div class="tres"></div>
+        <label class="f"><span>Zobrazit jen když (vrací true/false)</span><textarea name="visible_tpl" rows="2" data-tpl></textarea></label><div class="tres"></div>
+        <label class="f"><span>Průběh 0–100 (pruh dole)</span><textarea name="progress_tpl" rows="2" data-tpl></textarea></label><div class="tres"></div>
+        <label class="f" style="max-width:120px"><span>Barva průběhu</span><input type="color" name="progress_color"></label>
+      </details>
+      <details>
+        <summary>Akce prostředního tlačítka</summary>
+        <label class="f" style="margin-top:8px"><span>Akce</span><select name="action"><option value="">Další stránka</option><option value="toggle">Přepnout entitu (toggle)</option><option value="service">Zavolat službu</option></select></label>
+        <label class="f"><span>Entita akce (prázdné = entita stránky)</span><input name="action_entity" list="entities"></label>
+        <label class="f"><span>Služba (domain.service)</span><input name="action_service" placeholder="script.turn_on"></label>
+      </details>
+      <div class="row" style="margin-top:6px">
+        <button type="button" class="b s" id="pg-testall">Otestovat šablony</button>
+        <span class="mut" id="pg-testres"></span>
+      </div>
+    </div>
+    <div class="ft">
+      <button class="b d" value="delete" id="pg-del" formnovalidate>Smazat</button>
+      <span style="flex:1"></span>
+      <button class="b" value="cancel" formnovalidate>Zrušit</button>
+      <button class="b p" value="save">Uložit</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-presets">
+  <div class="hd"><h2>Nová stránka</h2><button class="b s" onclick="this.closest('dialog').close()">✕</button></div>
+  <div class="bd"><div class="presets" id="presets"></div></div>
+</dialog>
+
+<dialog id="dlg-icons">
+  <div class="hd"><h2>Vyber ikonu</h2><input id="ip-filter" placeholder="Hledat…" style="max-width:200px;margin-right:8px"><button class="b s" onclick="this.closest('dialog').close()">✕</button></div>
+  <div class="bd"><div class="icons" id="ip-grid"></div></div>
+</dialog>
+
+<datalist id="entities"></datalist>
+<div id="toast"></div>
+
+<script>
+'use strict';
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let CFG={}, PAGES=[], STATUS={}, ICONS=[], EFFECTS=[];
+const iconCache={};
+
+function toast(msg,err){const t=$('#toast');t.textContent=msg;t.className='show'+(err?' err':'');clearTimeout(t._h);t._h=setTimeout(()=>t.className='',2600)}
+async function api(path,opt={}){
+  const o={method:opt.method||(opt.body!==undefined?'POST':'GET'),headers:{}};
+  if(opt.body!==undefined){o.body=typeof opt.body==='string'?opt.body:JSON.stringify(opt.body);o.headers['Content-Type']='application/json'}
+  const r=await fetch(path,o);
+  if(opt.raw)return r;
+  const ct=r.headers.get('content-type')||'';
+  const d=ct.includes('json')?await r.json():await r.text();
+  if(!r.ok&&r.status!==202)throw new Error((d&&d.message)||d||r.status);
+  return d;
+}
+const getPath=(o,p)=>p.split('.').reduce((a,k)=>a==null?a:a[k],o);
+function setPath(o,p,v){const ks=p.split('.');let c=o;ks.forEach((k,i)=>{if(i===ks.length-1)c[k]=v;else{if(c[k]==null)c[k]=/^\d+$/.test(ks[i+1])?[]:{};c=c[k]}})}
+const fmtUp=s=>{s=+s;const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return(d?d+'d ':'')+h+'h '+m+'m'};
+
+/* ---------------------------------------------------------------- tabs */
+$('#nav').onclick=e=>{const b=e.target.closest('button');if(!b)return;$$('#nav button').forEach(x=>x.classList.toggle('act',x===b));$$('section.tab').forEach(s=>s.classList.toggle('act',s.id==='t-'+b.dataset.t));location.hash=b.dataset.t;if(b.dataset.t==='icons')renderLib()};
+if(location.hash){const b=$(`#nav button[data-t="${location.hash.slice(1)}"]`);b&&b.click()}
+
+/* ---------------------------------------------------------------- live preview */
+const pv=$('#preview'),pctx=pv.getContext('2d');let PW=32,PH=8,lastFrame=null;
+function drawPreview(buf){
+  lastFrame=buf;const cw=pv.clientWidth||640,cell=Math.max(4,Math.floor(cw/PW));
+  if(pv.width!==cell*PW||pv.height!==cell*PH){pv.width=cell*PW;pv.height=cell*PH}
+  pctx.fillStyle='#050608';pctx.fillRect(0,0,pv.width,pv.height);const r=cell*.42;
+  for(let y=0;y<PH;y++)for(let x=0;x<PW;x++){const i=(y*PW+x)*3,R=buf[i],G=buf[i+1],B=buf[i+2];const cx=x*cell+cell/2,cy=y*cell+cell/2;
+    if(R|G|B){pctx.shadowColor=`rgb(${R},${G},${B})`;pctx.shadowBlur=cell*.6;pctx.fillStyle=`rgb(${Math.min(255,R+20)},${Math.min(255,G+20)},${Math.min(255,B+20)})`}
+    else{pctx.shadowBlur=0;pctx.fillStyle='#16181d'}
+    pctx.beginPath();pctx.arc(cx,cy,r,0,7);pctx.fill()}
+  pctx.shadowBlur=0}
+window.addEventListener('resize',()=>lastFrame&&drawPreview(lastFrame));
+let ws,pollT;
+function connectWs(){
+  try{ws=new WebSocket(`ws://${location.host}/ws`);ws.binaryType='arraybuffer'}catch(e){return startPoll()}
+  ws.onmessage=e=>{if(typeof e.data==='string'){const h=JSON.parse(e.data);PW=h.w;PH=h.h}else drawPreview(new Uint8Array(e.data))};
+  ws.onclose=()=>{startPoll();setTimeout(connectWs,4000)};
+  ws.onopen=()=>{clearInterval(pollT);pollT=null};
+}
+function startPoll(){if(pollT)return;pollT=setInterval(async()=>{try{const r=await fetch('/api/frame');drawPreview(new Uint8Array(await r.arrayBuffer()))}catch(e){}},700)}
+connectWs();
+
+/* ---------------------------------------------------------------- status */
+function chip(id,txt,ok){const c=$(id);c.textContent=txt;c.className='chip '+(ok===true?'ok':ok===false?'err':'')}
+async function loadStatus(){
+  try{STATUS=await api('/api/status')}catch(e){chip('#c-wifi','offline',false);return}
+  const s=STATUS;PW=s.display.width;PH=s.display.height;
+  $('#devname').textContent=s.hostname;document.title=s.hostname+' – HA-Panel';
+  chip('#c-wifi',s.wifi.ap?'AP režim':('WiFi '+s.wifi.rssi+' dBm'),s.wifi.connected);
+  const hs={connected:'HA ✓',connecting:'HA připojuji…',auth_failed:'HA špatný token',disabled:'HA vyp.',no_wifi:'HA bez WiFi'};
+  chip('#c-ha',hs[s.ha.state]||s.ha.state,s.ha.state==='connected'?true:s.ha.state==='disabled'?null:false);
+  chip('#c-mqtt',s.mqtt.enabled?(s.mqtt.connected?'MQTT ✓':'MQTT ✗'):'MQTT vyp.',s.mqtt.enabled?s.mqtt.connected:null);
+  const d=s.display;
+  if(document.activeElement!==$('#c-bright')){$('#c-bright').value=d.brightness;$('#brv').textContent=d.brightness}
+  $('#c-autob').checked=d.auto_bright;$('#c-rot').checked=d.auto_rotate;$('#c-night').checked=d.night_enabled;
+  if(document.activeElement!==$('#c-color'))$('#c-color').value=(d.text_color||'#ffffff').toLowerCase();
+  $('#b-power').textContent=d.power?'⏻ Vypnout':'⏻ Zapnout';
+  $('#curpage').textContent=(s.apps.notification?'🔔 notifikace · ':'')+(s.apps.page?'Stránka: '+s.apps.page:'')+(s.apps.night?' · 🌙 noc':'');
+  $('#stat').innerHTML=[['IP',s.wifi.ip],['Čas',s.time_valid?s.time:'nesynchronizováno'],['Běží',fmtUp(s.uptime)],['Paměť',Math.round(s.heap/1024)+' kB volno'],
+    ['Jas',d.current_brightness+' / 255'],['Odběr (odhad)',d.current_ma+' mA'],['HA',s.ha.state+(s.ha.error?' – '+s.ha.error:'')+(s.ha.connected?' ('+s.ha.subscriptions+' šablon)':'')],
+    ['MQTT',s.mqtt.enabled?(s.mqtt.connected?'připojeno':'odpojeno '+(s.mqtt.error||'')):'vypnuto']].map(([k,v])=>`<b>${k}</b><span>${esc(v)}</span>`).join('');
+  $('#ha-stat').innerHTML=`<b>Stav</b><span>${esc(s.ha.state)} ${esc(s.ha.error||'')}</span><b>Šablon</b><span>${s.ha.subscriptions}</span>`;
+  $('#ldrraw').textContent=d.ldr_raw;
+  $('#sysinfo').innerHTML=[['Firmware',s.name+' '+s.version],['Sestaveno',s.build],['Čip',s.chip+' ('+s.cores+' jádra)'],['Flash',(s.flash/1048576).toFixed(0)+' MB'],
+    ['Firmware',(s.sketch_size/1024|0)+' kB, volno pro OTA '+(s.sketch_free/1024|0)+' kB'],['Souborový systém',(s.fs_used/1024|0)+' / '+(s.fs_total/1024|0)+' kB'],
+    ['Paměť',(s.heap/1024|0)+' kB (min '+(s.heap_min/1024|0)+' kB)'],['MAC',s.wifi.mac],['ID',s.id],['SSID',s.wifi.ssid||'–']].map(([k,v])=>`<b>${k}</b><span>${esc(v)}</span>`).join('');
+  $$('.bt').forEach(e=>e.textContent=CFG.mqtt?CFG.mqtt.topic:'hapanel/'+s.id);$$('.ip').forEach(e=>e.textContent=s.wifi.ip);$$('.hn').forEach(e=>e.textContent=s.hostname.replace(/-/g,'_'));
+  // live values in page list
+  (s.apps.pages||[]).forEach((p,i)=>{const e=$(`#pgv-${i}`);if(e)e.textContent=p.error?'⚠ chyba šablony':(p.text||'');const r=$(`#pg-${i}`);if(r)r.classList.toggle('cur',s.apps.page_index===i)});
+}
+setInterval(()=>{if(!document.hidden)loadStatus()},3000);
+
+/* ---------------------------------------------------------------- dashboard controls */
+const ctl=b=>api('/api/control',{body:b}).then(loadStatus).catch(e=>toast(e.message,1));
+$('#b-prev').onclick=()=>ctl({prev:true});$('#b-next').onclick=()=>ctl({next:true});$('#b-sel').onclick=()=>ctl({select:true});
+$('#b-power').onclick=()=>ctl({power:!STATUS.display.power});
+$('#b-test').onclick=()=>api('/api/test',{method:'POST'});
+$('#c-bright').oninput=e=>$('#brv').textContent=e.target.value;
+$('#c-bright').onchange=e=>ctl({brightness:+e.target.value,auto_bright:false});
+$('#c-autob').onchange=e=>ctl({auto_bright:e.target.checked});
+$('#c-rot').onchange=e=>ctl({auto_rotate:e.target.checked});
+$('#c-night').onchange=e=>ctl({night:e.target.checked});
+$('#c-color').onchange=e=>ctl({text_color:e.target.value});
+$('#n-send').onclick=()=>{const t=$('#n-text').value;if(!t&&!$('#n-icon').dataset.value)return;
+  api('/api/notify',{body:{text:t,icon:$('#n-icon').dataset.value,color:$('#n-color').value,duration:+$('#n-dur').value,rainbow:$('#n-rain').checked,hold:$('#n-hold').checked,wakeup:$('#n-wake').checked}}).then(()=>toast('Odesláno')).catch(e=>toast(e.message,1))};
+$('#n-dis').onclick=()=>api('/api/dismiss',{method:'POST'});
+
+/* ---------------------------------------------------------------- icons data */
+function hexToFrame(h){const a=new Uint8Array(192);for(let i=0;i<192;i++)a[i]=parseInt(h.substr(i*2,2),16)||0;return a}
+function frameToHex(f){return[...f].map(v=>v.toString(16).padStart(2,'0')).join('')}
+async function getIcon(name){
+  if(!name)return null;if(iconCache[name])return iconCache[name];
+  const p=api('/api/icon?name='+encodeURIComponent(name)).then(d=>({name:d.name,builtin:d.builtin,delay:d.delay||0,frames:d.frames.map(hexToFrame)})).catch(()=>null);
+  iconCache[name]=p;return p;
+}
+function paintIcon(cv,frame){const c=cv.getContext('2d'),im=c.createImageData(8,8);for(let i=0;i<64;i++){im.data[i*4]=frame[i*3];im.data[i*4+1]=frame[i*3+1];im.data[i*4+2]=frame[i*3+2];im.data[i*4+3]=255}c.putImageData(im,0,0)}
+async function drawIconTo(cv,name){const ic=await getIcon(name);const c=cv.getContext('2d');c.fillStyle='#000';c.fillRect(0,0,8,8);if(ic)paintIcon(cv,ic.frames[0])}
+function iconCanvas(name,cls='ic'){const c=document.createElement('canvas');c.width=8;c.height=8;c.className=cls;drawIconTo(c,name);return c}
+async function loadIcons(){ICONS=await api('/api/icons')}
+
+/* icon picker */
+let pickTarget=null;
+function setPicker(el,name){el.dataset.value=name||'';el.innerHTML='';el.append(iconCanvas(name));const s=document.createElement('span');s.textContent=name||'(bez ikony)';s.className=name?'':'mut';el.append(s)}
+function openPicker(el){pickTarget=el;$('#ip-filter').value='';fillPicker();$('#dlg-icons').showModal()}
+function fillPicker(){const f=$('#ip-filter').value.toLowerCase(),g=$('#ip-grid');g.innerHTML='';
+  const none=document.createElement('div');none.className='icon';none.innerHTML='<canvas class="ic" width="8" height="8"></canvas>žádná';none.onclick=()=>{setPicker(pickTarget,'');$('#dlg-icons').close()};g.append(none);
+  ICONS.filter(i=>i.name.includes(f)).forEach(i=>{const d=document.createElement('div');d.className='icon'+(i.builtin?'':' custom');d.append(iconCanvas(i.name));d.append(i.name);d.onclick=()=>{setPicker(pickTarget,i.name);$('#dlg-icons').close()};g.append(d)})}
+$('#ip-filter').oninput=fillPicker;
+$$('.ipick').forEach(el=>{el.onclick=()=>openPicker(el);setPicker(el,'')});
+
+/* ---------------------------------------------------------------- pages */
+const TYPES={clock:'Hodiny',date:'Datum',entity:'Entita',template:'Šablona',text:'Text',effect:'Efekt'};
+async function loadPages(){PAGES=await api('/api/pages');renderPages()}
+function pageDesc(p){switch(p.type){case'entity':return p.entity;case'template':return p.text;case'text':return p.text;case'effect':return p.effect+(p.text?' · '+p.text:'');case'clock':return p.style==1?'velké číslice':'malé číslice';default:return''}}
+function renderPages(){
+  const l=$('#pglist');l.innerHTML='';
+  if(!PAGES.length)l.innerHTML='<p class="mut">Žádné stránky – zobrazí se výchozí hodiny.</p>';
+  PAGES.forEach((p,i)=>{
+    const d=document.createElement('div');d.className='pg'+(p.enabled?'':' off');d.id='pg-'+i;
+    d.append(iconCanvas(p.icon));
+    const inf=document.createElement('div');inf.className='inf';
+    inf.innerHTML=`<div><span class="nm">${esc(p.name)}</span><span class="badge">${TYPES[p.type]||p.type}</span>${p.visible_tpl?'<span class="badge">podmíněná</span>':''}${p.action?'<span class="badge">akce</span>':''}</div><div class="mut mono">${esc(pageDesc(p))}</div><div class="val" id="pgv-${i}"></div>`;
+    d.append(inf);
+    const b=(t,title,fn,cls='')=>{const x=document.createElement('button');x.className='b s '+cls;x.textContent=t;x.title=title;x.onclick=fn;d.append(x)};
+    b('↑','Nahoru',()=>movePage(i,-1));b('↓','Dolů',()=>movePage(i,1));
+    b(p.enabled?'⏸':'▶',p.enabled?'Vypnout':'Zapnout',()=>{p.enabled=!p.enabled;savePages()});
+    b('👁','Zobrazit teď',()=>ctl({page:p.name}));
+    b('⧉','Duplikovat',()=>{PAGES.splice(i+1,0,{...p,name:p.name+' 2'});savePages()});
+    b('Upravit','Upravit',()=>editPage(i),'p');
+    l.append(d)});
+  loadStatus();
+}
+function movePage(i,dir){const j=i+dir;if(j<0||j>=PAGES.length)return;[PAGES[i],PAGES[j]]=[PAGES[j],PAGES[i]];savePages()}
+async function savePages(){try{await api('/api/pages',{body:PAGES});renderPages();toast('Stránky uloženy')}catch(e){toast('Chyba: '+e.message,1)}}
+async function loadCustom(){try{const c=await api('/api/custom');$('#customlist').innerHTML=c.length?c.map(x=>`<div class="pg"><div class="inf"><span class="nm">${esc(x.name)}</span> <span class="mono">${esc(x.text)}</span></div><button class="b s d" onclick="api('/api/custom?name=${encodeURIComponent(x.name)}',{method:'DELETE'}).then(loadCustom)">Smazat</button></div>`).join(''):'žádné'}catch(e){}}
+
+const PRESETS=[
+ {t:'Hodiny',d:'velké číslice',p:{type:'clock',name:'Hodiny',style:1,duration:10}},
+ {t:'Hodiny s ikonou',d:'malé číslice + ikona',p:{type:'clock',name:'Hodiny',style:0,icon:'clock',duration:10}},
+ {t:'Datum',d:'s kalendářem',p:{type:'date',name:'Datum',duration:5}},
+ {t:'Entita HA',d:'libovolný senzor',p:{type:'entity',name:'Senzor',decimals:1,icon:'thermometer'}},
+ {t:'Šablona HA',d:'Jinja šablona',p:{type:'template',name:'Šablona',text:"{{ states('sun.sun') }}"}},
+ {t:'Text',d:'pevný text',p:{type:'text',name:'Text',text:'Ahoj!',icon:'heart'}},
+ {t:'Efekt',d:'animace',p:{type:'effect',name:'Efekt',effect:'fire',duration:10}},
+ {t:'Počasí',d:'teplota + ikona počasí',p:{type:'template',name:'Počasí',text:"{{ state_attr('weather.forecast_home','temperature') | round(0) | int }}°",icon_tpl:"{{ states('weather.forecast_home') }}",icon:'partlycloudy'}},
+ {t:'Venkovní teplota',d:'barva dle teploty',p:{type:'entity',name:'Venku',entity:'sensor.venku_teplota',decimals:1,icon:'thermometer',color_tpl:"{% set t = states('sensor.venku_teplota')|float(0) %}{{ '#40a0ff' if t < 0 else '#ffffff' if t < 25 else '#ff6000' }}"}},
+ {t:'Vlhkost',d:'',p:{type:'entity',name:'Vlhkost',entity:'sensor.vlhkost',decimals:0,icon:'humidity'}},
+ {t:'Spotřeba',d:'W, červená nad 3 kW',p:{type:'entity',name:'Spotřeba',entity:'sensor.spotreba',decimals:0,icon:'bolt',color_tpl:"{{ '#ff3000' if states('sensor.spotreba')|float(0) > 3000 else '#ffffff' }}"}},
+ {t:'Fotovoltaika',d:'výkon + pruh',p:{type:'entity',name:'FVE',entity:'sensor.fve_vykon',decimals:0,icon:'solar',progress_tpl:"{{ (states('sensor.fve_vykon')|float(0) / 10000 * 100) | int }}",progress_color:'#ffc000'}},
+ {t:'Baterie',d:'% + pruh',p:{type:'entity',name:'Baterie',entity:'sensor.telefon_baterie',decimals:0,icon:'battery',progress_tpl:"{{ states('sensor.telefon_baterie') }}",icon_tpl:"{{ 'battery_low' if states('sensor.telefon_baterie')|float(100) < 20 else 'battery' }}"}},
+ {t:'Pračka',d:'jen když pere',p:{type:'template',name:'Pračka',text:"{{ states('sensor.pracka_zbyva') }} min",icon:'washer',visible_tpl:"{{ is_state('binary_sensor.pracka_bezi','on') }}"}},
+ {t:'Světlo (přepínač)',d:'tlačítkem přepíná',p:{type:'template',name:'Světlo',text:"{{ 'ZAP' if is_state('light.obyvak','on') else 'VYP' }}",icon_tpl:"{{ 'bulb' if is_state('light.obyvak','on') else 'bulb_off' }}",action:'toggle',action_entity:'light.obyvak'}},
+ {t:'Otevřené dveře',d:'varování',p:{type:'text',name:'Dveře',text:'Dveře otevřené!',icon:'door',color:'#ff3000',visible_tpl:"{{ is_state('binary_sensor.dvere','on') }}"}},
+ {t:'Svoz odpadu',d:'',p:{type:'entity',name:'Odpad',entity:'sensor.svoz_odpadu',icon:'trash',unit:'-'}},
+ {t:'CO₂',d:'barva podle ppm',p:{type:'entity',name:'CO2',entity:'sensor.co2',decimals:0,icon:'co2',unit:'-',color_tpl:"{% set c = states('sensor.co2')|float(0) %}{{ '#00ff00' if c < 1000 else '#ffc000' if c < 1500 else '#ff0000' }}"}},
+];
+const PAGE_DEF={name:'',type:'clock',enabled:true,icon:'',entity:'',decimals:-1,unit:'',text:'',color_tpl:'',icon_tpl:'',visible_tpl:'',progress_tpl:'',color:'',progress_color:'',duration:8,effect:'',rainbow:false,style:0,action:'',action_entity:'',action_service:''};
+$('#pg-add').onclick=()=>{const g=$('#presets');g.innerHTML='';PRESETS.forEach(pr=>{const b=document.createElement('button');b.className='b';b.innerHTML=`${esc(pr.t)}<small>${esc(pr.d)}</small>`;b.onclick=()=>{$('#dlg-presets').close();editPage(-1,{...PAGE_DEF,...pr.p})};g.append(b)});$('#dlg-presets').showModal()};
+
+let editIdx=-1;
+function fillFx(sel,type){sel.innerHTML=(type==='effect'?'':'<option value="">— žádný —</option>')+EFFECTS.map(e=>`<option>${e}</option>`).join('')}
+function updType(){const t=$('#pg-type').value;$$('#pgform [data-for]').forEach(d=>{const on=d.dataset.for===t;d.style.display=on?'':'none';$$('input,textarea,select',d).forEach(x=>x.disabled=!on)});
+  $('#fx-label').textContent=t==='effect'?'Efekt':'Efekt v pozadí';const v=$('#pg-fx').value;fillFx($('#pg-fx'),t);$('#pg-fx').value=v||(t==='effect'?'fire':'');
+  if(t==='entity'||$$('#pgform [name=action_entity]').length)loadEntities()}
+$('#pg-type').onchange=updType;
+function editPage(i,preset){
+  editIdx=i;const p={...PAGE_DEF,...(preset||PAGES[i])};const f=$('#pgform');
+  $('#pg-title').textContent=i<0?'Nová stránka':'Upravit: '+p.name;$('#pg-del').style.display=i<0?'none':'';
+  f.name.value=p.name;f.type.value=p.type;f.enabled.checked=p.enabled;f.duration.value=p.duration;f.style.value=p.style;
+  f.entity.value=p.entity;f.decimals.value=p.decimals;f.unit.value=p.unit;
+  $$('[name=text]',f).forEach(x=>x.value=p.text);
+  f.color_on.checked=!!p.color;f.color.value=p.color||'#ffffff';f.rainbow.checked=p.rainbow;
+  ['color_tpl','icon_tpl','visible_tpl','progress_tpl','action','action_entity','action_service'].forEach(k=>f[k].value=p[k]||'');
+  f.progress_color.value=p.progress_color||'#00a0ff';
+  setPicker($('#pg-icon'),p.icon);
+  $$('.tres',f).forEach(x=>{x.style.display='none'});$('#pg-testres').textContent='';
+  fillFx($('#pg-fx'),p.type);$('#pg-fx').value=p.effect;
+  $$('details',f).forEach(d=>d.open=!!(p.color_tpl||p.icon_tpl||p.visible_tpl||p.progress_tpl)&&d.querySelector('[name=color_tpl]')||!!p.action&&!!d.querySelector('[name=action]'));
+  updType();$('#dlg-page').returnValue='';$('#dlg-page').showModal();
+}
+$('#dlg-page').addEventListener('close',async()=>{
+  const v=$('#dlg-page').returnValue,f=$('#pgform');
+  if(v==='delete'){if(confirm('Smazat stránku?')){PAGES.splice(editIdx,1);savePages()}return}
+  if(v!=='save')return;
+  const t=f.type.value,txt=$$('[name=text]',f).find(x=>!x.disabled);
+  const p={...PAGE_DEF,name:f.name.value.trim()||TYPES[t],type:t,enabled:f.enabled.checked,duration:+f.duration.value||8,style:+f.style.value,
+    entity:f.entity.value.trim(),decimals:+f.decimals.value,unit:f.unit.value,text:txt?txt.value:'',icon:$('#pg-icon').dataset.value,
+    color:f.color_on.checked?f.color.value:'',rainbow:f.rainbow.checked,effect:$('#pg-fx').value,progress_color:f.progress_tpl.value?f.progress_color.value:''};
+  ['color_tpl','icon_tpl','visible_tpl','progress_tpl','action','action_entity','action_service'].forEach(k=>p[k]=f[k].value.trim());
+  if(editIdx<0)PAGES.push(p);else PAGES[editIdx]=p;
+  savePages();
+});
+$('#pgform').addEventListener('submit',e=>{if(e.submitter&&e.submitter.value==='save'&&!$('#pgform').checkValidity())e.preventDefault()});
+
+/* template testing */
+async function renderTpl(tpl){
+  await api('/api/ha/render',{body:{template:tpl}});
+  for(let i=0;i<40;i++){await sleep(300);const r=await api('/api/ha/render');if(r.state==='done')return{ok:true,v:r.result};if(r.state==='error')return{ok:false,v:r.result}}
+  return{ok:false,v:'timeout'};
+}
+function entityTpl(f){const e=f.entity.value.trim();return`{{ states('${e}') }}{{ state_attr('${e}','unit_of_measurement') or '' }}`}
+$('#pg-testall').onclick=async()=>{
+  const f=$('#pgform');$('#pg-testres').textContent='Testuji…';
+  const jobs=[];
+  if(f.type.value==='entity'&&f.entity.value)jobs.push([null,entityTpl(f)]);
+  $$('textarea[data-tpl]',f).forEach(t=>{if(!t.disabled&&t.value.trim())jobs.push([t,t.value])});
+  if(!jobs.length){$('#pg-testres').textContent='Žádné šablony';return}
+  for(const[t,tpl]of jobs){
+    let r;try{r=await renderTpl(tpl)}catch(e){r={ok:false,v:e.message}}
+    if(t){const o=t.closest('label').nextElementSibling;o.style.display='block';o.textContent='→ '+r.v;o.classList.toggle('err',!r.ok)}
+    else $('#pg-testres').textContent='Entita → '+r.v;
+  }
+  if(!jobs.some(j=>!j[0]))$('#pg-testres').textContent='Hotovo';
+};
+let entLoaded=false;
+async function loadEntities(){
+  if(entLoaded||!CFG.ha||!CFG.ha.enabled)return;entLoaded=true;$('#ent-hint').textContent='Načítám entity z HA…';
+  for(let i=0;i<40;i++){const r=await fetch('/api/ha/entities');if(r.status===200){const t=await r.text();const dl=$('#entities');dl.innerHTML='';let n=0;
+      t.split('\n').forEach(l=>{if(!l)return;const[id,name]=l.split('\t');const o=document.createElement('option');o.value=id;o.label=name||'';dl.append(o);n++});
+      $('#ent-hint').textContent=n+' entit načteno z HA';return}
+    if(r.status!==202){$('#ent-hint').textContent='Seznam entit nedostupný ('+(await r.text())+')';entLoaded=false;return}await sleep(700)}
+  entLoaded=false;
+}
+
+/* ---------------------------------------------------------------- icon editor */
+let frames=[new Uint8Array(192)],curF=0,tool='pen',drawing=false,selLib=null;
+const PAL=['#000000','#ffffff','#909090','#303030','#ff0000','#800000','#ff7000','#ffd000','#ffe890','#00e000','#007000','#00e0e0','#0040ff','#40a0ff','#a0d8ff','#ff40a0','#ff00ff','#8000ff','#8b4513','#ffc090'];
+const ed=$('#ed');for(let i=0;i<64;i++){const c=document.createElement('div');c.dataset.i=i;ed.append(c)}
+$('#ie-pal').innerHTML=PAL.map(c=>`<i style="background:${c}" data-c="${c}"></i>`).join('');
+$('#ie-pal').onclick=e=>{const c=e.target.dataset.c;if(c){$('#ie-color').value=c;if(tool==='erase'||tool==='pick')setTool('pen')}};
+const hex2rgb=h=>[1,3,5].map(i=>parseInt(h.substr(i,2),16));
+const rgb2hex=(r,g,b)=>'#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+function paintEd(){const f=frames[curF];$$('#ed div').forEach((d,i)=>d.style.background=rgb2hex(f[i*3],f[i*3+1],f[i*3+2]));renderFrames()}
+function renderFrames(){const w=$('#ie-frames');w.innerHTML='';frames.forEach((f,i)=>{const c=document.createElement('canvas');c.width=8;c.height=8;paintIcon(c,f);if(i===curF)c.className='sel';c.onclick=()=>{curF=i;paintEd()};w.append(c)})}
+function setPx(i,rgb){const f=frames[curF];f[i*3]=rgb[0];f[i*3+1]=rgb[1];f[i*3+2]=rgb[2]}
+function getPx(i){const f=frames[curF];return[f[i*3],f[i*3+1],f[i*3+2]]}
+function flood(i,target,rgb){const same=(a,b)=>a[0]==b[0]&&a[1]==b[1]&&a[2]==b[2];if(same(target,rgb))return;const st=[i];while(st.length){const k=st.pop();if(k<0||k>63||!same(getPx(k),target))continue;setPx(k,rgb);const x=k%8;if(x>0)st.push(k-1);if(x<7)st.push(k+1);st.push(k-8,k+8)}}
+function applyTool(i){const col=hex2rgb($('#ie-color').value);
+  if(tool==='pen')setPx(i,col);else if(tool==='erase')setPx(i,[0,0,0]);else if(tool==='fill')flood(i,getPx(i),col);
+  else if(tool==='pick'){const p=getPx(i);$('#ie-color').value=rgb2hex(...p);setTool('pen')}
+  paintEd()}
+function cellFromEvent(e){const t=document.elementFromPoint(e.clientX,e.clientY);return t&&t.parentNode===ed?+t.dataset.i:-1}
+ed.addEventListener('pointerdown',e=>{drawing=true;ed.setPointerCapture(e.pointerId);const i=cellFromEvent(e);if(i>=0)applyTool(i)});
+ed.addEventListener('pointermove',e=>{if(!drawing||(tool!=='pen'&&tool!=='erase'))return;const i=cellFromEvent(e);if(i>=0)applyTool(i)});
+ed.addEventListener('pointerup',()=>drawing=false);
+ed.addEventListener('contextmenu',e=>e.preventDefault());
+function setTool(t){tool=t;$$('#ie-tools button').forEach(b=>b.classList.toggle('act',b.dataset.tool===t))}
+$('#ie-tools').onclick=e=>{const b=e.target.closest('button');if(b)setTool(b.dataset.tool)};
+$$('[data-op]').forEach(b=>b.onclick=()=>{const f=frames[curF],o=new Uint8Array(192),op=b.dataset.op;
+  for(let y=0;y<8;y++)for(let x=0;x<8;x++){let sx=x,sy=y;
+    if(op==='left')sx=(x+1)%8;if(op==='right')sx=(x+7)%8;if(op==='up')sy=(y+1)%8;if(op==='down')sy=(y+7)%8;if(op==='flipx')sx=7-x;if(op==='flipy')sy=7-y;
+    if(op!=='clear')for(let c=0;c<3;c++)o[(y*8+x)*3+c]=f[(sy*8+sx)*3+c]}
+  frames[curF]=o;paintEd()});
+$('#ie-fadd').onclick=()=>{if(frames.length>=8)return toast('Max. 8 snímků',1);frames.splice(curF+1,0,new Uint8Array(192));curF++;paintEd()};
+$('#ie-fdup').onclick=()=>{if(frames.length>=8)return toast('Max. 8 snímků',1);frames.splice(curF+1,0,new Uint8Array(frames[curF]));curF++;paintEd()};
+$('#ie-fdel').onclick=()=>{if(frames.length<2)return;frames.splice(curF,1);curF=Math.max(0,curF-1);paintEd()};
+$('#ie-new').onclick=()=>{frames=[new Uint8Array(192)];curF=0;$('#ie-name').value='';selLib=null;paintEd()};
+let animT=0,animF=0;setInterval(()=>{const d=Math.max(50,+$('#ie-delay').value||250);animT+=100;if(animT>=d){animT=0;animF=(animF+1)%frames.length;paintIcon($('#ie-anim'),frames[animF%frames.length])}},100);
+$('#ie-import').onchange=e=>{const file=e.target.files[0];if(!file)return;const img=new Image();img.onload=()=>{
+  const c=document.createElement('canvas'),x=c.getContext('2d');let n=1;
+  if(img.height===8&&img.width%8===0&&img.width<=64)n=img.width/8;
+  c.width=8*n;c.height=8;x.imageSmoothingEnabled=n===1&&(img.width>8||img.height>8);x.drawImage(img,0,0,8*n,8);
+  const d=x.getImageData(0,0,8*n,8).data;frames=[];
+  for(let k=0;k<n;k++){const f=new Uint8Array(192);for(let y=0;y<8;y++)for(let xx=0;xx<8;xx++){const s=(y*8*n+k*8+xx)*4,a=d[s+3]/255;for(let ch=0;ch<3;ch++)f[(y*8+xx)*3+ch]=Math.round(d[s+ch]*a)}frames.push(f)}
+  curF=0;if(!$('#ie-name').value)$('#ie-name').value=file.name.replace(/\.[^.]+$/,'').toLowerCase().replace(/[^a-z0-9_-]/g,'_').slice(0,24);paintEd();URL.revokeObjectURL(img.src)};
+  img.src=URL.createObjectURL(file);e.target.value=''};
+$('#ie-export').onclick=()=>{const c=document.createElement('canvas');c.width=8*frames.length;c.height=8;const x=c.getContext('2d');
+  frames.forEach((f,k)=>{const t=document.createElement('canvas');t.width=8;t.height=8;paintIcon(t,f);x.drawImage(t,k*8,0)});
+  const a=document.createElement('a');a.href=c.toDataURL('image/png');a.download=($('#ie-name').value||'ikona')+'.png';a.click()};
+$('#ie-save').onclick=async()=>{const n=$('#ie-name').value.trim().toLowerCase();if(!/^[a-z0-9_-]{1,24}$/.test(n))return toast('Neplatný název (a-z, 0-9, _ -, max 24)',1);
+  if(ICONS.some(i=>i.name===n&&i.builtin)&&!confirm('Přepsat vestavěnou ikonu vlastní verzí?'))return;
+  try{await api('/api/icon',{body:{name:n,delay:+$('#ie-delay').value||250,frames:frames.map(frameToHex)}});delete iconCache[n];await loadIcons();renderLib();toast('Ikona uložena')}catch(e){toast(e.message,1)}};
+$('#ie-show').onclick=()=>{const n=$('#ie-name').value.trim().toLowerCase();if(!n)return;api('/api/notify',{body:{text:n,icon:n,duration:4}})};
+$('#ie-del').onclick=async()=>{if(!selLib)return toast('Vyber vlastní ikonu v knihovně',1);const ic=ICONS.find(i=>i.name===selLib);if(!ic||ic.builtin)return toast('Vestavěné ikony nelze smazat',1);
+  if(!confirm('Smazat ikonu '+selLib+'?'))return;await api('/api/icon?name='+encodeURIComponent(selLib),{method:'DELETE'});delete iconCache[selLib];selLib=null;await loadIcons();renderLib()};
+function renderLib(){const f=$('#ic-filter').value.toLowerCase(),g=$('#iclib');g.innerHTML='';
+  ICONS.filter(i=>i.name.includes(f)).forEach(i=>{const d=document.createElement('div');d.className='icon'+(i.builtin?'':' custom')+(selLib===i.name?' sel':'');d.append(iconCanvas(i.name));d.append(i.name);
+    d.onclick=async()=>{selLib=i.name;$$('#iclib .icon').forEach(x=>x.classList.toggle('sel',x===d));const ic=await getIcon(i.name);if(!ic)return;frames=ic.frames.map(x=>new Uint8Array(x));curF=0;$('#ie-name').value=i.builtin?i.name+'_2':i.name;$('#ie-delay').value=ic.delay||250;paintEd()};g.append(d)})}
+$('#ic-filter').oninput=renderLib;
+
+/* ---------------------------------------------------------------- settings */
+const TZ=[['Praha / Bratislava / Berlín (CET)','CET-1CEST,M3.5.0,M10.5.0/3'],['Londýn (GMT/BST)','GMT0BST,M3.5.0/1,M10.5.0'],['Helsinky / Kyjev (EET)','EET-2EEST,M3.5.0/3,M10.5.0/4'],
+ ['Moskva','MSK-3'],['New York','EST5EDT,M3.2.0,M11.1.0'],['Chicago','CST6CDT,M3.2.0,M11.1.0'],['Los Angeles','PST8PDT,M3.2.0,M11.1.0'],['UTC','UTC0'],['Tokio','JST-9'],['Sydney','AEST-10AEDT,M10.1.0,M4.1.0/3']];
+$('#tzsel').innerHTML='<option value="">— vlastní —</option>'+TZ.map(([n,v])=>`<option value="${v}">${n}</option>`).join('');
+$('#tzsel').onchange=e=>{if(e.target.value)$('[name="time.tz"]').value=e.target.value};
+function fillForms(){
+  $$('form[data-form] [name]').forEach(el=>{const v=getPath(CFG,el.name);if(el.type==='checkbox')el.checked=!!v;else if(el.type==='color')el.value=(v||'#ffffff').toLowerCase();else el.value=v??''});
+  $('#tzsel').value=TZ.some(t=>t[1]===CFG.time.tz)?CFG.time.tz:'';
+  $('#nightcol-on').checked=!!CFG.night.color;
+}
+async function loadConfig(){CFG=await api('/api/config');fillForms()}
+$$('form[data-form]').forEach(f=>f.addEventListener('submit',async e=>{e.preventDefault();const body={};
+  $$('[name]',f).forEach(el=>{let v=el.type==='checkbox'?el.checked:el.value;if(el.type==='number'||el.hasAttribute('data-num'))v=+v;setPath(body,el.name,v)});
+  if(f.contains($('#nightcol-on'))&&!$('#nightcol-on').checked)body.night.color='';
+  if(body.indicators)body.indicators=[0,1,2].map(i=>body.indicators[i]||'');
+  try{const r=await api('/api/config',{body});await loadConfig();
+    if(r.reboot){if(confirm('Uloženo. Změna vyžaduje restart – restartovat teď?')){await api('/api/reboot',{method:'POST'});toast('Restartuji…');setTimeout(()=>location.reload(),8000)}}
+    else toast('Uloženo')}catch(err){toast('Chyba: '+err.message,1)}}));
+$$('[data-act=test]').forEach(b=>b.onclick=()=>api('/api/test',{method:'POST'}));
+$('#hwpreset').onchange=e=>{const v=e.target.value,s=(n,val)=>{const el=$(`[name="${n}"]`);if(el.type==='checkbox')el.checked=val;else el.value=val};
+  if(v==='flex'){s('matrix.width',32);s('matrix.height',8);s('matrix.vertical',true);s('matrix.serpentine',true);s('matrix.start_right',false);s('matrix.start_bottom',false);s('matrix.order','GRB')}
+  if(v==='rows'){s('matrix.vertical',false);s('matrix.serpentine',true);s('matrix.start_right',false);s('matrix.start_bottom',false)}
+  if(v==='ulanzi'){s('matrix.pin',32);s('matrix.width',32);s('matrix.height',8);s('matrix.vertical',false);s('matrix.serpentine',true);s('matrix.start_right',false);s('matrix.start_bottom',false);s('matrix.order','GRB');
+    s('display.ldr_pin',35);s('buttons.pins.0',26);s('buttons.pins.1',27);s('buttons.pins.2',14);toast('Nastaveno i čidlo a tlačítka – ulož všechny tři sekce')}};
+$('#scan').onclick=async()=>{$('#scan').textContent='Hledám…';for(let i=0;i<30;i++){const r=await fetch('/api/wifi/scan'+(i?'':'?refresh=1'));if(r.status===200){const d=await r.json();
+  $('#ssids').innerHTML=d.networks.sort((a,b)=>b.rssi-a.rssi).map(n=>`<option value="${esc(n.ssid)}">${n.rssi} dBm${n.secure?' 🔒':''}</option>`).join('');$('#scan').textContent=d.networks.length+' sítí';$('[name="net.ssid"]').focus();return}await sleep(700)}$('#scan').textContent='Hledat sítě'};
+
+/* ---------------------------------------------------------------- system */
+$('#reboot').onclick=async()=>{if(!confirm('Restartovat zařízení?'))return;await api('/api/reboot',{method:'POST'});toast('Restartuji…');setTimeout(()=>location.reload(),8000)};
+$('#freset').onclick=async()=>{if(!confirm('Smazat nastavení a stránky? (vlastní ikony zůstanou)'))return;await api('/api/factory_reset',{method:'POST'});toast('Obnoveno, restartuji…');setTimeout(()=>location.reload(),9000)};
+$('#fwup').onclick=()=>{const f=$('#fw').files[0];if(!f)return toast('Vyber soubor .bin',1);const fd=new FormData();fd.append('firmware',f,f.name);
+  const x=new XMLHttpRequest();x.open('POST','/api/update');x.upload.onprogress=e=>{$('#fwbar').style.width=(e.loaded/e.total*100)+'%'};
+  x.onload=()=>{let m='';try{m=JSON.parse(x.responseText).message}catch(e){}toast(m||('HTTP '+x.status),x.status!==200);if(x.status===200)setTimeout(()=>location.reload(),12000)};
+  x.onerror=()=>toast('Chyba nahrávání',1);x.send(fd)};
+$('#bk-down').onclick=async()=>{const cfg=await api('/api/config?secrets=1'),pages=await api('/api/pages'),icons={};
+  for(const i of ICONS.filter(i=>!i.builtin)){const d=await api('/api/icon?name='+encodeURIComponent(i.name));icons[i.name]={delay:d.delay,frames:d.frames}}
+  const blob=new Blob([JSON.stringify({hapanel:1,config:cfg,pages,icons},null,1)],{type:'application/json'});const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=`hapanel-${STATUS.hostname||'backup'}-${new Date().toISOString().slice(0,10)}.json`;a.click()};
+$('#bk-up').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const b=JSON.parse(await f.text());if(!b.hapanel)throw new Error('Neplatný soubor');
+  if(!confirm('Obnovit zálohu? Přepíše nastavení, stránky a ikony.'))return;
+  for(const[n,ic]of Object.entries(b.icons||{}))await api('/api/icon',{body:{name:n,delay:ic.delay,frames:ic.frames}});
+  if(b.pages)await api('/api/pages',{body:b.pages});
+  const r=await api('/api/config',{body:b.config});toast('Záloha obnovena');
+  if(r.reboot&&confirm('Restartovat pro použití všech změn?'))await api('/api/reboot',{method:'POST'});
+  setTimeout(()=>location.reload(),1500)}catch(err){toast('Chyba: '+err.message,1)}e.target.value=''};
+
+/* ---------------------------------------------------------------- init */
+(async()=>{
+  try{await loadConfig()}catch(e){toast('Nelze načíst konfiguraci',1)}
+  try{EFFECTS=await api('/api/effects')}catch(e){}
+  try{await loadIcons()}catch(e){}
+  $$('.ipick').forEach(el=>setPicker(el,el.dataset.value));
+  await loadStatus();await loadPages();loadCustom();setInterval(()=>{if(!document.hidden&&$('#t-pages').classList.contains('act'))loadCustom()},5000);
+  paintEd();
+})();
+</script>
+</body>
+</html>

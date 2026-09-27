@@ -1,0 +1,44 @@
+name: Build firmware
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        env: [esp32-s3, esp32dev, esp32-c3, ulanzi-tc001]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.platformio/.cache
+          key: pio-${{ matrix.env }}-${{ hashFiles('platformio.ini') }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install platformio esptool
+      - run: pio run -e ${{ matrix.env }}
+      - name: Merge factory image
+        run: |
+          B=.pio/build/${{ matrix.env }}
+          case "${{ matrix.env }}" in
+            esp32-s3) CHIP=esp32s3; BOOT=0x0 ;;
+            esp32-c3) CHIP=esp32c3; BOOT=0x0 ;;
+            *)        CHIP=esp32;   BOOT=0x1000 ;;
+          esac
+          BOOTAPP=$(find ~/.platformio/packages/framework-arduinoespressif32 -name boot_app0.bin | head -1)
+          esptool.py --chip $CHIP merge_bin -o hapanel-${{ matrix.env }}-factory.bin --flash_mode dio --flash_size keep \
+            $BOOT $B/bootloader.bin 0x8000 $B/partitions.bin 0xe000 $BOOTAPP 0x10000 $B/firmware.bin
+          cp $B/firmware.bin hapanel-${{ matrix.env }}-ota.bin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hapanel-${{ matrix.env }}
+          path: hapanel-*.bin
