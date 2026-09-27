@@ -81,7 +81,7 @@ struct Config {
   uint8_t width = 32, height = 8;
   bool vertical = true, serpentine = true, startRight = false, startBottom = false;
   String colorOrder = "GRB";
-  uint16_t maxCurrent = 2000;     // mA, 0 = unlimited
+  uint16_t maxCurrent = 850;      // mA, 0 = unlimited (850 = safe when powered through the board/USB, like WLED)
   bool gamma = true;
 
   // --- display

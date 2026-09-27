@@ -322,8 +322,16 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{border-bottom:1px
       <label class="sw"><input type="checkbox" name="matrix.start_bottom"><i></i>První LED dole</label>
       <div class="row">
         <label class="f"><span>Pořadí barev</span><select name="matrix.order"><option>GRB</option><option>RGB</option><option>BRG</option><option>RBG</option><option>GBR</option><option>BGR</option></select></label>
-        <label class="f"><span>Limit proudu (mA, 0 = bez)</span><input type="number" name="matrix.max_current" min="0" step="100"></label>
+        <label class="f"><span>Limit proudu (mA, 0 = bez)</span><input type="number" name="matrix.max_current" min="0" step="50"></label>
       </div>
+      <label class="f"><span>Napájení panelu</span>
+        <select id="pwrpreset"><option value="">— vyber zdroj —</option>
+          <option value="450">Přes desku z USB portu počítače (450 mA)</option>
+          <option value="850">Přes desku z USB nabíječky 5 V/1–2 A (850 mA, jako WLED)</option>
+          <option value="1500">Přes desku, nabíječka 3 A + silný kabel (1500 mA)</option>
+          <option value="3500">Externí zdroj 5 V/4 A přímo do panelu (3500 mA)</option>
+          <option value="8000">Externí zdroj 5 V/10 A (8000 mA)</option></select></label>
+      <p class="hint">Při napájení přes desku teče proud panelu přes USB konektor a dráhy desky – drž limit do ~1 A.</p>
       <label class="sw"><input type="checkbox" name="matrix.gamma"><i></i>Gama korekce (věrnější barvy)</label>
       <p class="hint">Testovací obrazec: <b style="color:#f33">červená</b> = vlevo nahoře, <b style="color:#3f3">zelená</b> = vpravo nahoře, <b style="color:#39f">modrá</b> = vlevo dole, bílá = vpravo dole. Pin, rozměr a pořadí barev se projeví po restartu.</p>
       <div class="row"><button class="b p">Uložit</button><button type="button" class="b" data-act="test">Testovací obrazec</button></div>
@@ -905,6 +913,7 @@ $$('form[data-form]').forEach(f=>f.addEventListener('submit',async e=>{e.prevent
   try{const r=await api('/api/config',{body});await loadConfig();
     if(r.reboot){if(confirm('Uloženo. Změna vyžaduje restart – restartovat teď?')){await api('/api/reboot',{method:'POST'});toast('Restartuji…');setTimeout(()=>location.reload(),8000)}}
     else toast('Uloženo')}catch(err){toast('Chyba: '+err.message,1)}}));
+$('#pwrpreset').onchange=e=>{if(e.target.value)$('[name="matrix.max_current"]').value=e.target.value};
 $$('[data-act=test]').forEach(b=>b.onclick=()=>api('/api/test',{method:'POST'}));
 $('#hwpreset').onchange=e=>{const v=e.target.value,s=(n,val)=>{const el=$(`[name="${n}"]`);if(el.type==='checkbox')el.checked=val;else el.value=val};
   if(v==='flex'){s('matrix.width',32);s('matrix.height',8);s('matrix.vertical',true);s('matrix.serpentine',true);s('matrix.start_right',false);s('matrix.start_bottom',false);s('matrix.order','GRB')}

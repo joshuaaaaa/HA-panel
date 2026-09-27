@@ -72,6 +72,28 @@ Vestavěné ikony:
 
 ## Zapojení
 
+### Varianta A – napájení přes desku (jako u WLED, nejjednodušší)
+
+```
+  USB nabíječka 5 V ══ USB kabel ══ ESP32 deska
+                                     │
+                    pin 5V / VIN ────┼──────────────── +5V  (červený) panelu
+                    pin GND ─────────┼──────────────── GND  (bílý/černý) panelu
+                    GPIO14 ── 330 Ω ─┴──────────────── DIN  (zelený) panelu
+                    (S3: GPIO14, ESP32: GPIO16, C3: GPIO5 – lze změnit ve webu)
+```
+
+- Firmware má z výroby **limit proudu 850 mA** (stejně jako WLED), takže USB konektor, kabel
+  ani dráhy desky se nepřetíží. Displej zobrazující text a ikony se do tohoto limitu vejde
+  s rezervou – omezení se projeví jen u celoplošných efektů při vysokém jasu (automaticky ztmaví).
+- Volbu najdeš v *Nastavení → Matice → Napájení panelu* (USB z počítače 450 mA,
+  nabíječka 850 mA, silná nabíječka 1500 mA). Víc než ~1 A přes desku nedoporučuji –
+  některé desky mají na 5V větvi ochrannou diodu nebo tenké dráhy.
+- Použij kvalitní krátký USB kabel a nabíječku alespoň 5 V/2 A.
+- Kondenzátor 470–1000 µF mezi +5V a GND u panelu je vhodný i zde (vyhladí špičky).
+
+### Varianta B – externí zdroj (pro vyšší jas / efekty)
+
 ```
   Zdroj 5 V / 4 A ──┬─────────────────────── +5V  (červený) panelu
                     │        ┌── 1000 µF ──┐
@@ -89,11 +111,10 @@ Vestavěné ikony:
 ```
 
 Poznámky:
-- Panel 8×32 má 256 LED; při plném bílém jasu by bral až **15 A**. Firmware má omezovač proudu
-  (výchozí 2000 mA) – nastav ho podle zdroje (*Nastavení → Matice → Limit proudu*). Pro běžný
-  provoz stačí zdroj 5 V / 3–4 A.
-- Napájej panel **přímo ze zdroje**, ne přes desku ESP32. Kondenzátor 1000 µF na vstupu panelu
-  a rezistor 330 Ω v datovém vodiči chrání první LED.
+- Panel 8×32 má 256 LED; při plném bílém jasu by bral až **15 A**. Omezovač proudu nastav
+  podle zdroje (*Nastavení → Matice → Napájení panelu*), např. 3500 mA pro zdroj 4 A.
+- U této varianty veď napájení panelu **přímo ze zdroje**, ne přes desku. Kondenzátor 1000 µF
+  na vstupu panelu a rezistor 330 Ω v datovém vodiči chrání první LED.
 - Datový signál 3,3 V obvykle stačí. Pokud panel bliká nebo zobrazuje nesmysly, přidej převodník
   úrovní **74AHCT125** (nebo SN74AHCT1G125) na 5 V.
 
