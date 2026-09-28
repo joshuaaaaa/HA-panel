@@ -207,6 +207,7 @@ zařízení **hapanel-xxxxxx** s entitami (ID entit začínají `hapanel_xxxxxx_
 | `notify.*_notifikace` | posílání zpráv (`notify.send_message`) |
 | `text.*_zprava` | rychlá zpráva – co napíšeš, to se zobrazí |
 | `sensor.*_aplikace` | právě zobrazená stránka; atributy: MQTT prefix, IP, verze, seznam ikon a stránek |
+| `sensor.*_stranky` | počet stránek; atributy: kompletní konfigurace stránek + ikony (pro kartu) |
 | `image.*_obrazovka` | živý obraz displeje (zapni přepínačem „Obraz do Home Assistantu“) |
 | `sensor.*` | Wi-Fi signál, doba běhu, odhad proudu, okolní světlo |
 | `binary_sensor.*_tlacitko_*` | fyzická tlačítka (pro automatizace) |
@@ -215,7 +216,12 @@ zařízení **hapanel-xxxxxx** s entitami (ID entit začínají `hapanel_xxxxxx_
 
 ![Karta HA-Panel](docs/ha-card.png)
 
-Karta ukazuje živý náhled displeje a umí vše ovládat: zapnutí, jas, přepínání a výběr stránky,
+Karta obsahuje **správu stránek** (stejně jako web panelu): seznam stránek s ikonami a živými hodnotami
+z HA, přesun ↑↓, zapnutí/vypnutí, zobrazit teď, duplikovat, upravit, smazat a přidání z předvoleb.
+Editor stránky má našeptávač entit z HA a tlačítko *Otestovat šablony*. Změny se posílají do panelu
+přes MQTT (`<prefix>/pages/set`) a panel je hned uloží.
+
+Dále ukazuje živý náhled displeje a umí vše ovládat: zapnutí, jas, přepínání a výběr stránky,
 notifikace s ikonou a barvou, náladu, indikátory i nastavení (rychlost posunu, doba zobrazení,
 přechody, velká písmena, pruh dní). Má vizuální editor.
 
@@ -231,8 +237,8 @@ Instalace:
    type: custom:hapanel-card
    entity: light.hapanel_xxxxxx_displej
    title: LED panel
-   notify_open: true        # volitelné; dále show_preview / show_controls / show_notify /
-                            # show_mood / show_indicators / show_settings: false
+   notify_open: true        # volitelné; dále show_pages / pages_open / show_preview / show_controls /
+                            # show_notify / show_mood / show_indicators / show_settings: false
    ```
 4. Pro živý náhled zapni v kartě *Nastavení → Obraz do HA* (panel pak posílá obraz jen když se změní;
    entitu `image.…_obrazovka` doporučuji vyřadit z recorderu, viz níže).

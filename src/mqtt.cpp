@@ -238,6 +238,15 @@ void publishDiscovery() {
     d["icon"] = "mdi:application-outline";
     disc("sensor", "app", d);
   }
+  {  // page configuration (attributes) - used by the Lovelace card to list and edit pages
+    JsonDocument d;
+    d["name"] = "Stránky";
+    d["stat_t"] = t("pages/attr");
+    d["val_tpl"] = "{{ value_json.count }}";
+    d["json_attr_t"] = t("pages/attr");
+    d["icon"] = "mdi:view-carousel";
+    disc("sensor", "pages", d);
+  }
   {  // live screen image
     JsonDocument d;
     d["name"] = "Obrazovka";
@@ -315,6 +324,26 @@ static void publishInfo() {
   JsonArray icons = d["icons"].to<JsonArray>();
   for (JsonObject o : ic.as<JsonArray>()) icons.add(o["name"]);
   pubJson(t("info"), d, true);
+}
+
+// full page configuration for the Lovelace card (sensor "Stránky" attributes) + first frame
+// of every icon used by the pages so the card can draw them
+static void publishPages() {
+  JsonDocument d;
+  JsonArray pages = d["pages"].to<JsonArray>();
+  JsonObject icons = d["icon_data"].to<JsonObject>();
+  {
+    Lock l;
+    pagesToJson(pages);
+    d["count"] = cfg.pageCount;
+    for (int i = 0; i < cfg.pageCount; i++) {
+      const String& n = cfg.pages[i].icon;
+      if (n.isEmpty() || icons[n].is<const char*>()) continue;
+      JsonDocument ic;
+      if (Icons::toJson(n, ic.to<JsonObject>())) icons[n] = ic["frames"][0].as<String>();
+    }
+  }
+  pubJson(t("pages/attr"), d, true);
 }
 
 void publishState() {
@@ -521,6 +550,23 @@ static void onMessage(char* topicC, uint8_t* payload, unsigned int len) {
   } else if (sub == "page/set") {
     Apps::gotoPage(p);
     reqMqttState = true;
+  } else if (sub == "pages/set") {
+    // replace the whole page list (sent by the Lovelace card)
+    JsonDocument d;
+    if (deserializeJson(d, p)) {
+      Serial.println("[mqtt] pages/set: invalid JSON");
+      return;
+    }
+    JsonArrayConst arr = d.is<JsonArray>() ? d.as<JsonArrayConst>() : d["pages"].as<JsonArrayConst>();
+    if (arr.isNull()) return;
+    {
+      Lock l;
+      pagesFromJson(arr);
+      Apps::onPagesChanged();
+    }
+    reqSavePages = true;
+    reqHaResync = true;
+    reqMqttRediscover = true;
   } else if (sub == "message/set") {
     JsonDocument d;
     d.set(p);
@@ -631,7 +677,7 @@ static bool connect() {
   const char* subs[] = {"light/set", "moodlight/set", "indicator1/set", "indicator2/set", "indicator3/set",
                         "brightness/set", "page/set", "message/set", "autorotate/set", "autobright/set",
                         "night/set", "uppercase/set", "weekday/set", "screen/set", "scroll/set", "apptime/set",
-                        "transms/set", "transition/set", "cmd",
+                        "transms/set", "transition/set", "cmd", "pages/set",
                         // AWTRIX 3 compatible topics
                         "power", "notify", "dismiss", "custom/+", "indicator1", "indicator2", "indicator3",
                         "notify/dismiss", "sleep", "moodlight", "switch", "nextapp", "previousapp", "settings",
@@ -640,6 +686,7 @@ static bool connect() {
   mq.subscribe((cfg.discoveryPrefix + "/status").c_str());
   publishDiscovery();
   publishInfo();
+  publishPages();
   publishState();
   publishSensors();
   if (cfg.screenInterval) publishScreen(true);
@@ -647,7 +694,7 @@ static bool connect() {
 }
 
 void begin() {
-  mq.setBufferSize(4096);
+  mq.setBufferSize(16384);  // page configuration can be several kB
   mq.setCallback(onMessage);
   mq.setKeepAlive(30);
   mq.setSocketTimeout(5);
@@ -678,6 +725,7 @@ void loop() {
     reqMqttRediscover = false;
     publishDiscovery();
     publishInfo();
+    publishPages();
   }
   if (reqMqttState) {
     reqMqttState = false;
