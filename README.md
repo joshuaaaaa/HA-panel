@@ -54,8 +54,8 @@ Vestavěné ikony:
 - 64 vestavěných ikon 8×8 (i animovaných). Ikony počasí se jmenují jako stavy HA
   (`sunny`, `rainy`, `partlycloudy`…), takže šablona `{{ states('weather.home') }}` rovnou vybere ikonu
 - Vlastní font 3×5 **s českou diakritikou** (á č ď é ě í ň ó ř š ť ú ů ý ž), ° ² ³ €
-- Plynulý posun dlouhého textu, přechody (posun, prolínání), 9 efektů (duha, oheň, plasma,
-  matrix, sníh, jiskření, vlny, polární záře, hvězdy) i jako pozadí stránky
+- Plynulý posun dlouhého textu, přechody (posun, prolínání), **56 animovaných efektů** a
+  **21 druhů animovaných očí** – jako samostatná stránka i jako pozadí (viz [Efekty a oči](#efekty-a-oči))
 - 3 **indikátory** na pravém okraji (např. otevřené okno = červená tečka)
 - Noční režim (čas od–do, snížený jas, jen hodiny, přebarvení)
 - Automatický jas z fotorezistoru, plynulé změny jasu
@@ -81,6 +81,61 @@ Vestavěné ikony:
   tlačítek, indikátorů, hesla
 - OTA aktualizace firmwaru, záloha/obnova (JSON), tovární nastavení
 - Při prvním spuštění vlastní Wi-Fi AP s captive portálem
+
+## Efekty a oči
+
+Efekty lze použít jako stránku typu **Efekt** (volitelně s textem přes efekt), jako pozadí jakékoli
+stránky, přes světlo `light.*_displej` v HA (seznam efektů) nebo v notifikaci / vlastní aplikaci
+klíčem `"effect"`. Názvy efektů z AWTRIX 3 (`Fireworks`, `SwirlIn`, `TwinklingStars`, `LookingEyes`…)
+jsou přijímány také.
+
+### Animované oči
+
+Oči jsou kreslené procedurálně s vyhlazováním (supersampling 3×3), samy se rozhlíží (sakády),
+mrkají v náhodných intervalech (občas dvakrát) a každý styl má vlastní výraz víček.
+
+![Oči](docs/eyes.png)
+
+| Název | Popis |
+|---|---|
+| `eyes` | přirozené modré oči, rozhlížení a mrkání |
+| `eyes_mood` | střídá nálady každých 6 s (neutrální → veselé → naštvané → smutné → překvapené → podezíravé → ospalé → zamilované) |
+| `eyes_evil` | zlé růžovo‑fialové svítící oči se žlutou duhovkou |
+| `eyes_demon` | rudé démonské oči se svislou zornicí |
+| `eyes_angry` / `eyes_sad` / `eyes_happy` | naštvané (sklopená víčka), smutné (se slzou), veselé (^ ^) |
+| `eyes_sleepy` | ospalé – pomalu klesající víčka, dlouhé mrknutí |
+| `eyes_surprised` | vykulené oči s malou zornicí |
+| `eyes_suspicious` | přimhouřené oči těkající zleva doprava |
+| `eyes_love` | pulzující srdíčka místo zornic |
+| `eyes_wink` | občas mrkne jedním okem |
+| `eyes_dizzy` | točící se spirály |
+| `eyes_crazy` | každé oko se dívá jinam |
+| `eyes_cat` | kočičí oči se štěrbinou |
+| `eyes_robot` / `eyes_scan` | hranaté azurové robotí oči / skenování zleva doprava |
+| `eyes_ice` / `eyes_star` | ledové oči / rotující hvězdičky |
+| `eyes_cyclops` / `eyes_cyclops_robot` | jedno velké oko přes celý panel |
+
+### Efekty
+
+![Efekty](docs/effects.png)
+
+- **Klasické**: `rainbow`, `rainbow_diag`, `plasma`, `plasma_cloud`, `fire`, `matrix`, `pixel_rain`, `snow`,
+  `sparkle`, `waves`, `aurora`, `stars`, `twinkle`, `colorwaves`, `fade`, `noise`, `pacifica`
+- **Z AWTRIX 3**: `fireworks`, `ripple`, `snake`, `pingpong`, `brickbreaker`, `radar`, `checkerboard`,
+  `theater`, `swirl_in`, `swirl_out`, `moving_line`, `plasma_cloud`, `twinkle`
+- **Hry a retro**: `tetris`, `pacman`, `invaders`, `snake`, `life` (Game of Life)
+- **Příroda a počasí**: `rain`, `storm` (bouřka s blesky), `clouds`, `sunrise`, `bubbles`, `lava`
+- **2D (inspirováno WLED)**: `metaballs`, `bounce`, `dna`, `equalizer`, `starfield`, `confetti`, `comet`,
+  `sinelon`, `juggle`, `scanner` (Knight Rider), `hypno`, `spiral`
+- **Tematické**: `hearts`, `heartbeat`, `police`, `ecg`, `xmas`, `flag_cz`
+
+Příklad – zlé oči na 20 s z automatizace:
+```yaml
+action: mqtt.publish
+data:
+  topic: awtrix_xxxxxx/notify
+  payload: '{"effect":"eyes_evil","duration":20}'
+```
 
 ## Jakou desku použít
 
@@ -349,7 +404,8 @@ src/main.cpp           start, hlavní smyčka, vykreslovací úloha (50 fps)
 src/apps.*             stránky, notifikace, přechody, indikátory, noční režim
 src/display.*          plátno, font s diakritikou, mapování matice, jas, omezovač proudu
 src/icons*.{h,cpp}     vestavěné + vlastní ikony (LittleFS)
-src/effects.*          animované efekty
+src/effects.*          animované efekty (56)
+src/eyes.*             animované oči (21 stylů)
 src/ha_client.*        Home Assistant WebSocket (render_template) + REST
 src/mqtt.*             MQTT + auto-discovery
 src/awtrix.*           AWTRIX 3 kompatibilní API (stats, settings, power, moodlight…)

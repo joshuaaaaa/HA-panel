@@ -8,7 +8,7 @@
  *   2. Settings -> Dashboards -> ⋮ -> Resources -> Add: /local/hapanel-card.js (JavaScript module)
  *   3. add card: type: custom:hapanel-card, entity: light.<panel>_displej
  */
-const CARD_VERSION = "1.2.1";
+const CARD_VERSION = "1.3.0";
 
 // entity names published by the firmware (MQTT discovery); matched against friendly_name
 const NAMES = {
@@ -42,6 +42,8 @@ const NAMES = {
   pages: ["sensor", "Stránky"],
 };
 
+const FX_CZ = {"rainbow": "Duha", "rainbow_diag": "Duha šikmá", "plasma": "Plazma", "plasma_cloud": "Plazmový mrak", "fire": "Oheň", "matrix": "Matrix", "pixel_rain": "Barevný déšť pixelů", "snow": "Sníh", "sparkle": "Jiskření", "waves": "Vlna", "aurora": "Polární záře", "stars": "Hvězdy", "twinkle": "Třpytivé hvězdy", "fireworks": "Ohňostroj", "ripple": "Kapky na hladině", "snake": "Had (hra)", "pingpong": "Ping-pong (hra)", "brickbreaker": "Arkanoid (hra)", "tetris": "Tetris (hra)", "pacman": "Pac-Man", "invaders": "Space Invaders", "radar": "Radar", "checkerboard": "Šachovnice", "theater": "Divadelní světla", "colorwaves": "Barevné vlny", "swirl_in": "Vír dovnitř", "swirl_out": "Vír ven", "pacifica": "Oceán (Pacifica)", "moving_line": "Pohyblivá čára", "fade": "Prolínání barev", "life": "Hra života", "metaballs": "Metaballs", "lava": "Lávová lampa", "bounce": "Skákající míčky", "rain": "Déšť", "storm": "Bouřka", "clouds": "Mraky na nebi", "sunrise": "Východ slunce", "bubbles": "Bublinky", "hearts": "Srdíčka", "heartbeat": "Tep srdce", "dna": "DNA šroubovice", "equalizer": "Ekvalizér", "starfield": "Let hvězdami", "confetti": "Konfety", "comet": "Kometa", "sinelon": "Sinelon", "juggle": "Žonglování", "scanner": "Knight Rider", "hypno": "Hypnóza", "spiral": "Spirála", "noise": "Šum (noise)", "police": "Policejní majáky", "ecg": "EKG", "xmas": "Vánoce", "flag_cz": "Vlajka ČR", "eyes": "👀 Oči – rozhlížení", "eyes_mood": "👀 Oči – střídání nálad", "eyes_evil": "👀 Oči – zlé (růžové)", "eyes_demon": "👀 Oči – démon", "eyes_angry": "👀 Oči – naštvané", "eyes_happy": "👀 Oči – veselé", "eyes_sad": "👀 Oči – smutné", "eyes_sleepy": "👀 Oči – ospalé", "eyes_surprised": "👀 Oči – překvapené", "eyes_suspicious": "👀 Oči – podezíravé", "eyes_love": "👀 Oči – zamilované", "eyes_wink": "👀 Oči – mrkající", "eyes_dizzy": "👀 Oči – omámené", "eyes_crazy": "👀 Oči – šilhající", "eyes_cat": "👀 Oči – kočičí", "eyes_robot": "👀 Oči – robot", "eyes_scan": "👀 Oči – skenující", "eyes_ice": "👀 Oči – ledové", "eyes_star": "👀 Oči – hvězdičky", "eyes_cyclops": "👁 Kyklop", "eyes_cyclops_robot": "👁 Robot kyklop"};
+const fxName = (e) => FX_CZ[e] || e;
 const TYPES = { clock: "Hodiny", date: "Datum", entity: "Entita", template: "Šablona", text: "Text", effect: "Efekt" };
 const PAGE_DEF = {
   name: "", type: "clock", enabled: true, icon: "", entity: "", decimals: -1, unit: "", text: "",
@@ -56,6 +58,8 @@ const PRESETS = [
   { t: "Šablona HA", d: "Jinja šablona", p: { type: "template", name: "Šablona", text: "{{ states('sun.sun') }}" } },
   { t: "Text", d: "pevný text", p: { type: "text", name: "Text", text: "Ahoj!", icon: "heart" } },
   { t: "Efekt", d: "animace", p: { type: "effect", name: "Efekt", effect: "fire", duration: 10 } },
+  { t: "Oči", d: "animované oči", p: { type: "effect", name: "Oči", effect: "eyes_mood", duration: 15 } },
+  { t: "Zlé oči", d: "růžové svítící oči", p: { type: "effect", name: "Zlé oči", effect: "eyes_evil", duration: 15 } },
   { t: "Počasí", d: "teplota + ikona", p: { type: "template", name: "Počasí", text: "{{ state_attr('weather.forecast_home','temperature') | round(0) | int }}°", icon_tpl: "{{ states('weather.forecast_home') }}", icon: "partlycloudy" } },
   { t: "Teplota", d: "barva dle teploty", p: { type: "entity", name: "Venku", entity: "", decimals: 1, icon: "thermometer", color_tpl: "" } },
   { t: "Spotřeba / FVE", d: "W + pruh", p: { type: "entity", name: "FVE", entity: "", decimals: 0, icon: "solar", progress_color: "#ffc000" } },
@@ -544,7 +548,7 @@ class HAPanelCard extends HTMLElement {
     switch (p.type) {
       case "entity": return p.entity;
       case "template": case "text": return p.text;
-      case "effect": return p.effect + (p.text ? " · " + p.text : "");
+      case "effect": return fxName(p.effect) + (p.text ? " · " + p.text : "");
       case "clock": return p.style == 1 ? "velké číslice" : "malé číslice";
       default: return "";
     }
@@ -765,9 +769,9 @@ class HAPanelCard extends HTMLElement {
     const info = (this._st("app") || {}).attributes || {};
     const icons = info.icons || [];
     const effects = info.effects || ["rainbow", "plasma", "fire", "matrix", "snow"];
-    const opt = (list, cur, empty) =>
+    const opt = (list, cur, empty, label = (o) => o) =>
       (empty !== undefined ? `<option value="">${empty}</option>` : "") +
-      (cur && !list.includes(cur) ? [cur, ...list] : list).map((o) => `<option value="${esc(o)}" ${o === cur ? "selected" : ""}>${esc(o)}</option>`).join("");
+      (cur && !list.includes(cur) ? [cur, ...list] : list).map((o) => `<option value="${esc(o)}" ${o === cur ? "selected" : ""}>${esc(label(o))}</option>`).join("");
     ed.innerHTML = `
       <b>${idx < 0 ? "Nová stránka" : "Upravit: " + esc(p.name)}</b>
       <div class="two">
@@ -792,7 +796,7 @@ class HAPanelCard extends HTMLElement {
       <div data-for="text"><label>Text</label><input type="text" data-k="text" value="${esc(p.text)}"></div>
       <div data-for="effect"><label>Text přes efekt</label><input type="text" data-k="text" value="${esc(p.text)}"></div>
       <div class="two">
-        <div><label>${p.type === "effect" ? "Efekt" : "Efekt v pozadí"}</label><select data-k="effect">${opt(effects, p.effect, p.type === "effect" ? undefined : "žádný")}</select></div>
+        <div><label>${p.type === "effect" ? "Efekt" : "Efekt v pozadí"}</label><select data-k="effect">${opt(effects, p.effect, p.type === "effect" ? undefined : "žádný", fxName)}</select></div>
         <div><label>Barva textu</label><div class="row" style="margin:0"><label class="sw" style="margin:0;color:inherit"><input type="checkbox" data-k="color_on" ${p.color ? "checked" : ""}>vlastní</label><input type="color" data-k="color" value="${p.color || "#ffffff"}"></div></div>
       </div>
       <label class="sw" style="color:inherit"><input type="checkbox" data-k="enabled" ${p.enabled ? "checked" : ""}>Povoleno</label>

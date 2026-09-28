@@ -651,6 +651,8 @@ const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelect
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 let CFG={}, PAGES=[], STATUS={}, ICONS=[], EFFECTS=[];
+const FX_CZ={"rainbow": "Duha", "rainbow_diag": "Duha šikmá", "plasma": "Plazma", "plasma_cloud": "Plazmový mrak", "fire": "Oheň", "matrix": "Matrix", "pixel_rain": "Barevný déšť pixelů", "snow": "Sníh", "sparkle": "Jiskření", "waves": "Vlna", "aurora": "Polární záře", "stars": "Hvězdy", "twinkle": "Třpytivé hvězdy", "fireworks": "Ohňostroj", "ripple": "Kapky na hladině", "snake": "Had (hra)", "pingpong": "Ping-pong (hra)", "brickbreaker": "Arkanoid (hra)", "tetris": "Tetris (hra)", "pacman": "Pac-Man", "invaders": "Space Invaders", "radar": "Radar", "checkerboard": "Šachovnice", "theater": "Divadelní světla", "colorwaves": "Barevné vlny", "swirl_in": "Vír dovnitř", "swirl_out": "Vír ven", "pacifica": "Oceán (Pacifica)", "moving_line": "Pohyblivá čára", "fade": "Prolínání barev", "life": "Hra života", "metaballs": "Metaballs", "lava": "Lávová lampa", "bounce": "Skákající míčky", "rain": "Déšť", "storm": "Bouřka", "clouds": "Mraky na nebi", "sunrise": "Východ slunce", "bubbles": "Bublinky", "hearts": "Srdíčka", "heartbeat": "Tep srdce", "dna": "DNA šroubovice", "equalizer": "Ekvalizér", "starfield": "Let hvězdami", "confetti": "Konfety", "comet": "Kometa", "sinelon": "Sinelon", "juggle": "Žonglování", "scanner": "Knight Rider", "hypno": "Hypnóza", "spiral": "Spirála", "noise": "Šum (noise)", "police": "Policejní majáky", "ecg": "EKG", "xmas": "Vánoce", "flag_cz": "Vlajka ČR", "eyes": "👀 Oči – rozhlížení", "eyes_mood": "👀 Oči – střídání nálad", "eyes_evil": "👀 Oči – zlé (růžové)", "eyes_demon": "👀 Oči – démon", "eyes_angry": "👀 Oči – naštvané", "eyes_happy": "👀 Oči – veselé", "eyes_sad": "👀 Oči – smutné", "eyes_sleepy": "👀 Oči – ospalé", "eyes_surprised": "👀 Oči – překvapené", "eyes_suspicious": "👀 Oči – podezíravé", "eyes_love": "👀 Oči – zamilované", "eyes_wink": "👀 Oči – mrkající", "eyes_dizzy": "👀 Oči – omámené", "eyes_crazy": "👀 Oči – šilhající", "eyes_cat": "👀 Oči – kočičí", "eyes_robot": "👀 Oči – robot", "eyes_scan": "👀 Oči – skenující", "eyes_ice": "👀 Oči – ledové", "eyes_star": "👀 Oči – hvězdičky", "eyes_cyclops": "👁 Kyklop", "eyes_cyclops_robot": "👁 Robot kyklop"};
+const fxName=e=>FX_CZ[e]||e;
 const iconCache={};
 
 function toast(msg,err){const t=$('#toast');t.textContent=msg;t.className='show'+(err?' err':'');clearTimeout(t._h);t._h=setTimeout(()=>t.className='',2600)}
@@ -771,7 +773,7 @@ $$('.ipick').forEach(el=>{el.onclick=()=>openPicker(el);setPicker(el,'')});
 /* ---------------------------------------------------------------- pages */
 const TYPES={clock:'Hodiny',date:'Datum',entity:'Entita',template:'Šablona',text:'Text',effect:'Efekt'};
 async function loadPages(){PAGES=await api('/api/pages');renderPages()}
-function pageDesc(p){switch(p.type){case'entity':return p.entity;case'template':return p.text;case'text':return p.text;case'effect':return p.effect+(p.text?' · '+p.text:'');case'clock':return p.style==1?'velké číslice':'malé číslice';default:return''}}
+function pageDesc(p){switch(p.type){case'entity':return p.entity;case'template':return p.text;case'text':return p.text;case'effect':return fxName(p.effect)+(p.text?' · '+p.text:'');case'clock':return p.style==1?'velké číslice':'malé číslice';default:return''}}
 function renderPages(){
   const l=$('#pglist');l.innerHTML='';
   if(!PAGES.length)l.innerHTML='<p class="mut">Žádné stránky – zobrazí se výchozí hodiny.</p>';
@@ -802,6 +804,8 @@ const PRESETS=[
  {t:'Šablona HA',d:'Jinja šablona',p:{type:'template',name:'Šablona',text:"{{ states('sun.sun') }}"}},
  {t:'Text',d:'pevný text',p:{type:'text',name:'Text',text:'Ahoj!',icon:'heart'}},
  {t:'Efekt',d:'animace',p:{type:'effect',name:'Efekt',effect:'fire',duration:10}},
+ {t:'Oči',d:'animované oči',p:{type:'effect',name:'Oči',effect:'eyes_mood',duration:15}},
+ {t:'Zlé oči',d:'růžové svítící oči',p:{type:'effect',name:'Zlé oči',effect:'eyes_evil',duration:15}},
  {t:'Počasí',d:'teplota + ikona počasí',p:{type:'template',name:'Počasí',text:"{{ state_attr('weather.forecast_home','temperature') | round(0) | int }}°",icon_tpl:"{{ states('weather.forecast_home') }}",icon:'partlycloudy'}},
  {t:'Venkovní teplota',d:'barva dle teploty',p:{type:'entity',name:'Venku',entity:'sensor.venku_teplota',decimals:1,icon:'thermometer',color_tpl:"{% set t = states('sensor.venku_teplota')|float(0) %}{{ '#40a0ff' if t < 0 else '#ffffff' if t < 25 else '#ff6000' }}"}},
  {t:'Vlhkost',d:'',p:{type:'entity',name:'Vlhkost',entity:'sensor.vlhkost',decimals:0,icon:'humidity'}},
@@ -818,7 +822,7 @@ const PAGE_DEF={name:'',type:'clock',enabled:true,icon:'',entity:'',decimals:-1,
 $('#pg-add').onclick=()=>{const g=$('#presets');g.innerHTML='';PRESETS.forEach(pr=>{const b=document.createElement('button');b.className='b';b.innerHTML=`${esc(pr.t)}<small>${esc(pr.d)}</small>`;b.onclick=()=>{$('#dlg-presets').close();editPage(-1,{...PAGE_DEF,...pr.p})};g.append(b)});$('#dlg-presets').showModal()};
 
 let editIdx=-1;
-function fillFx(sel,type){sel.innerHTML=(type==='effect'?'':'<option value="">— žádný —</option>')+EFFECTS.map(e=>`<option>${e}</option>`).join('')}
+function fillFx(sel,type){sel.innerHTML=(type==='effect'?'':'<option value="">— žádný —</option>')+EFFECTS.map(e=>`<option value="${e}">${fxName(e)}</option>`).join('')}
 function updType(){const t=$('#pg-type').value;$$('#pgform [data-for]').forEach(d=>{const on=d.dataset.for===t;d.style.display=on?'':'none';$$('input,textarea,select',d).forEach(x=>x.disabled=!on)});
   $('#fx-label').textContent=t==='effect'?'Efekt':'Efekt v pozadí';const v=$('#pg-fx').value;fillFx($('#pg-fx'),t);$('#pg-fx').value=v||(t==='effect'?'fire':'');
   if(t==='entity')$$('#pgform [data-for="entity"] .epick').forEach(initPicker)}

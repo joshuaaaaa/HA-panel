@@ -5,7 +5,7 @@
 #include <freertos/semphr.h>
 
 #define FW_NAME "HA-Panel"
-#define FW_VERSION "1.2.1"
+#define FW_VERSION "1.3.0"
 
 #define MAX_PAGES 24
 #define NUM_INDICATORS 3
