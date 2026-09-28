@@ -8,7 +8,7 @@
  *   2. Settings -> Dashboards -> ⋮ -> Resources -> Add: /local/hapanel-card.js (JavaScript module)
  *   3. add card: type: custom:hapanel-card, entity: light.<panel>_displej
  */
-const CARD_VERSION = "1.3.0";
+const CARD_VERSION = "1.3.1";
 
 // entity names published by the firmware (MQTT discovery); matched against friendly_name
 const NAMES = {
@@ -170,6 +170,7 @@ class HAPanelCard extends HTMLElement {
         .app{color:var(--secondary-text-color);font-size:.9em}
         .pv{background:#050608;border-radius:10px;padding:6px;margin-bottom:10px;position:relative}
         .pv canvas{width:100%;display:block;image-rendering:pixelated}
+        .pv.off{display:none}
         .pv .ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:8px;color:#aaa;font-size:.9em;text-align:center;padding:8px}
         .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
         .row>.grow{flex:1;min-width:120px}
@@ -215,8 +216,9 @@ class HAPanelCard extends HTMLElement {
       </style>
       <div class="hp">
         <div class="hd"><span class="dot" id="online"></span><span class="t" id="title"></span><span class="app" id="app"></span>
+          ${c.show_preview ? `<button class="b" id="pvbtn" title="Živý náhled zap / vyp"><ha-icon icon="mdi:eye"></ha-icon></button>` : ""}
           <button class="b" id="power" title="Zapnout / vypnout"><ha-icon icon="mdi:power"></ha-icon></button></div>
-        ${c.show_preview ? `<div class="pv"><canvas id="cv" width="320" height="80"></canvas><div class="ov" id="ov" hidden></div></div>` : ""}
+        ${c.show_preview ? `<div class="pv" id="pv"><canvas id="cv" width="320" height="80"></canvas><div class="ov" id="ov" hidden></div></div>` : ""}
         ${c.show_controls ? `
         <div class="row">
           <button class="b" id="prev" title="Předchozí"><ha-icon icon="mdi:chevron-left"></ha-icon></button>
@@ -297,6 +299,14 @@ class HAPanelCard extends HTMLElement {
     };
 
     on("power", "click", () => this._call("light", "toggle", "display"));
+    on("pvbtn", "click", () => {
+      const scr = this._st("screen");
+      const turnOn = !(scr && scr.state === "on");
+      this._pvWanted = turnOn;
+      this._pvWantedAt = Date.now();
+      this._call("switch", turnOn ? "turn_on" : "turn_off", "screen");
+      this._updatePreview((this._st("app") || {}).attributes || {});
+    });
     on("prev", "click", () => this._call("button", "press", "prev"));
     on("next", "click", () => this._call("button", "press", "next"));
     on("sel", "click", () => this._call("button", "press", "select"));
@@ -467,19 +477,32 @@ class HAPanelCard extends HTMLElement {
   _updatePreview(attrs) {
     const img = this._st("image");
     const ov = this._$("ov");
+    const pv = this._$("pv");
+    const btn = this._$("pvbtn");
     const scr = this._st("screen");
     const W = attrs.width || 32, H = attrs.height || 8;
-    if (!img || img.state === "unavailable" || (scr && scr.state !== "on")) {
+    // optimistic state after clicking the button (until HA confirms, max 5 s)
+    let on = scr ? scr.state === "on" : true;
+    if (this._pvWanted !== undefined) {
+      if (on === this._pvWanted || Date.now() - this._pvWantedAt > 5000) this._pvWanted = undefined;
+      else on = this._pvWanted;
+    }
+    if (btn) {
+      btn.hidden = !scr;
+      btn.classList.toggle("on", on);
+      btn.title = on ? "Vypnout živý náhled" : "Zapnout živý náhled";
+      const ic = btn.querySelector("ha-icon");
+      const icon = on ? "mdi:eye" : "mdi:eye-off";
+      if (ic.getAttribute("icon") !== icon) ic.setAttribute("icon", icon);
+    }
+    pv.classList.toggle("off", !on);
+    if (!on) {
+      this._lastPic = "";
+      return;
+    }
+    if (!img || img.state === "unavailable") {
       ov.hidden = false;
-      if (!ov._btn) {
-        ov.innerHTML = `<span>Živý náhled je vypnutý.</span>`;
-        const b = document.createElement("button");
-        b.className = "b";
-        b.textContent = "Zapnout obraz do HA";
-        b.onclick = () => this._call("switch", "turn_on", "screen");
-        ov.appendChild(b);
-        ov._btn = true;
-      }
+      ov.innerHTML = `<span>Čekám na obraz z panelu… (potřebuje MQTT a firmware ≥ 1.2)</span>`;
       this._drawEmpty(W, H);
       return;
     }

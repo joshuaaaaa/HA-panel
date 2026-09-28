@@ -295,7 +295,8 @@ Instalace:
    notify_open: true        # volitelné; dále show_pages / pages_open / show_preview / show_controls /
                             # show_notify / show_mood / show_indicators / show_settings: false
    ```
-4. Pro živý náhled zapni v kartě *Nastavení → Obraz do HA* (panel pak posílá obraz jen když se změní;
+4. Živý náhled zapneš / vypneš tlačítkem s okem v hlavičce karty (nebo *Nastavení → Obraz do HA*).
+   Vypnutím panel přestane posílat obraz přes MQTT úplně (panel pak posílá obraz jen když se změní;
    entitu `image.…_obrazovka` doporučuji vyřadit z recorderu, viz níže).
 
 ```yaml
