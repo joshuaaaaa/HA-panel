@@ -14,6 +14,7 @@
 #include "icons.h"
 #include "mqtt.h"
 #include "web_index.h"
+#include "web_card.h"
 #include "awtrix.h"
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
@@ -256,6 +257,14 @@ static void routes() {
     r->send(res);
   });
 
+  // Lovelace card for Home Assistant (add as dashboard resource)
+  server.on("/hapanel-card.js", HTTP_GET, [](AsyncWebServerRequest* r) {
+    AsyncWebServerResponse* res = r->beginResponse(200, "application/javascript", WEB_CARD_GZ, WEB_CARD_GZ_LEN);
+    res->addHeader("Content-Encoding", "gzip");
+    res->addHeader("Cache-Control", "no-cache");
+    r->send(res);
+  });
+
   server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest* r) {
     if (!auth(r)) return;
     JsonDocument d;
@@ -336,12 +345,14 @@ static void routes() {
     if (!auth(r)) return;
     String err;
     bool ok = Icons::save(j["name"] | "", j["delay"] | 200, j["frames"].as<JsonArrayConst>(), err);
+    if (ok) reqMqttRediscover = true;  // refresh icon list for the HA card
     sendOk(r, ok, ok ? nullptr : err.c_str());
   });
 
   server.on("/api/icon", HTTP_DELETE, [](AsyncWebServerRequest* r) {
     if (!auth(r)) return;
     if (!r->hasParam("name")) return sendOk(r, false, "name missing");
+    reqMqttRediscover = true;
     sendOk(r, Icons::remove(r->getParam("name")->value()));
   });
 

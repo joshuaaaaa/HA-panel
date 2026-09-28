@@ -298,6 +298,8 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{border-bottom:1px
       <label class="f"><span>Základní topic</span><input name="mqtt.topic"></label>
       <label class="sw"><input type="checkbox" name="mqtt.discovery"><i></i>Home Assistant auto-discovery</label>
       <label class="f"><span>Discovery prefix</span><input name="mqtt.prefix"></label>
+      <label class="f"><span>Živý obraz displeje do HA – interval (s, 0 = vypnuto)</span><input type="number" name="mqtt.screen" min="0" max="60"></label>
+      <p class="hint">Obraz se posílá jako entita <code>image.…_obrazovka</code> (jen když se změní). Používá ho karta panelu v HA. Zapnout jde i z HA přepínačem „Obraz do Home Assistantu“.</p>
       <button class="b p">Uložit</button>
     </form>
 

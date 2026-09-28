@@ -196,13 +196,68 @@ zařízení **hapanel-xxxxxx** s entitami (ID entit začínají `hapanel_xxxxxx_
 
 | Entita | Použití |
 |---|---|
-| `light.*_displej` | zap/vyp, jas, výchozí barva textu, efekty |
+| `light.*_displej` | zap/vyp, jas, výchozí barva textu, efekty (oheň, duha…) |
+| `light.*_nalada` | nálada – celý panel jednou barvou (barva + jas) |
+| `light.*_indikator_1..3` | indikátory v rohu (barva, efekt stálý / bliká / pulzuje) |
 | `select.*_stranka` | přepnout na stránku |
-| `switch.*` | automatické přepínání, automatický jas, noční režim |
-| `button.*` | další / předchozí stránka, zavřít notifikaci, restart |
-| `notify.*_notifikace` | posílání zpráv |
+| `select.*_prechod` | typ přechodu mezi stránkami |
+| `switch.*` | automatické přepínání, automatický jas, noční režim, velká písmena, pruh dní, obraz do HA |
+| `number.*` | jas, rychlost posunu textu, doba zobrazení aplikace, délka přechodu |
+| `button.*` | další / předchozí stránka, akce stránky, zavřít notifikaci, testovací obrazec, restart |
+| `notify.*_notifikace` | posílání zpráv (`notify.send_message`) |
+| `text.*_zprava` | rychlá zpráva – co napíšeš, to se zobrazí |
+| `sensor.*_aplikace` | právě zobrazená stránka; atributy: MQTT prefix, IP, verze, seznam ikon a stránek |
+| `image.*_obrazovka` | živý obraz displeje (zapni přepínačem „Obraz do Home Assistantu“) |
 | `sensor.*` | Wi-Fi signál, doba běhu, odhad proudu, okolní světlo |
 | `binary_sensor.*_tlacitko_*` | fyzická tlačítka (pro automatizace) |
+
+### 3. Karta do dashboardu (`hapanel-card`)
+
+![Karta HA-Panel](docs/ha-card.png)
+
+Karta ukazuje živý náhled displeje a umí vše ovládat: zapnutí, jas, přepínání a výběr stránky,
+notifikace s ikonou a barvou, náladu, indikátory i nastavení (rychlost posunu, doba zobrazení,
+přechody, velká písmena, pruh dní). Má vizuální editor.
+
+Instalace:
+1. Zkopíruj [`ha/hapanel-card.js`](ha/hapanel-card.js) do HA do složky `/config/www/`
+   (např. doplňkem *File editor* nebo *Samba*).
+   Pokud HA běží na `http://` (ne https), můžeš místo kopírování použít přímo adresu panelu
+   `http://<IP-panelu>/hapanel-card.js`.
+2. *Nastavení → Řídicí panely → ⋮ → Zdroje → Přidat zdroj*: URL `/local/hapanel-card.js`,
+   typ *JavaScript modul*. Obnov stránku (Ctrl+F5).
+3. Na dashboardu *Přidat kartu → HA-Panel LED matice* a vyber entitu `light.…_displej`. Nebo YAML:
+   ```yaml
+   type: custom:hapanel-card
+   entity: light.hapanel_xxxxxx_displej
+   title: LED panel
+   notify_open: true        # volitelné; dále show_preview / show_controls / show_notify /
+                            # show_mood / show_indicators / show_settings: false
+   ```
+4. Pro živý náhled zapni v kartě *Nastavení → Obraz do HA* (panel pak posílá obraz jen když se změní;
+   entitu `image.…_obrazovka` doporučuji vyřadit z recorderu, viz níže).
+
+```yaml
+# configuration.yaml – neukládat obraz do historie
+recorder:
+  exclude:
+    entity_globs:
+      - image.*_obrazovka
+```
+
+### 4. Blueprint pro notifikace z automatizací
+[`ha/blueprints/hapanel_notify.yaml`](ha/blueprints/hapanel_notify.yaml) – importuj
+(*Nastavení → Automatizace → Blueprinty → Importovat* s URL souboru na GitHubu, nebo zkopíruj do
+`/config/blueprints/script/`), vytvoř z něj skript a zadej MQTT prefix panelu. Pak v automatizacích:
+```yaml
+action: script.panel_notifikace
+data:
+  message: "Pračka dokončila"
+  icon: washer
+  color: [0, 255, 0]
+  duration: 8
+  wakeup: true
+```
 
 ### Příklady automatizací
 
@@ -296,6 +351,9 @@ src/web.*              webový server, REST API, živý náhled (WebSocket)
 src/hw.*               Wi-Fi/AP/mDNS/NTP, tlačítka, čidlo světla
 src/config.*           konfigurace (JSON v LittleFS)
 web/index.html         webové rozhraní (vloží se do firmwaru)
+ha/hapanel-card.js     karta do HA dashboardu (servíruje ji i panel na /hapanel-card.js)
+ha/blueprints/         blueprint skriptu pro notifikace
+src/png.*              PNG kodér pro živý obraz do HA
 tools/gen_font.py      generátor fontu (src/font.h)
 tools/embed_web.py     komprese webu do src/web_index.h
 firmware/              hotové binární soubory

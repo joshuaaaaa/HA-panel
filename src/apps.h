@@ -29,6 +29,8 @@ void customList(JsonArray a);
 // indicators (1..3): object {color, blink} or empty to clear override
 void setIndicator(int idx, JsonVariantConst v);
 bool indicatorOn(int idx);
+void indicatorState(int idx, int32_t& color, uint16_t& blink, uint16_t& fade);  // MQTT/API set state
+void moodState(bool& on, uint32_t& color, uint8_t& bri);
 
 // AWTRIX 3 compatible extras
 void setMoodlight(JsonVariantConst v);   // {"brightness":170,"kelvin":2300} / {"color":[..]}; empty = off

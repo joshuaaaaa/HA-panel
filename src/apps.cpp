@@ -70,6 +70,7 @@ struct Indicator {
   int32_t tplColor = -1;
   int32_t mqttColor = -1;
   uint16_t blink = 0;
+  uint16_t fade = 0;
   uint32_t expires = 0;
 };
 
@@ -561,6 +562,11 @@ static void drawIndicators(Canvas& c, uint32_t now) {
     if (col <= 0) continue;
     if (d.blink && (now / d.blink) % 2) continue;
     RGB rc((uint32_t)col);
+    if (d.fade) {
+      uint32_t ph = now % (2 * d.fade);
+      uint32_t lvl = ph < d.fade ? 255 * ph / d.fade : 255 * (2 * d.fade - ph) / d.fade;
+      rc = rc.scale(max<uint32_t>(lvl, 10));
+    }
     if (i == 0) { c.set(W - 1, 0, rc); c.set(W - 2, 0, rc); c.set(W - 1, 1, rc); }
     else if (i == 1) { c.set(W - 1, H / 2 - 1, rc); c.set(W - 1, H / 2, rc); }
     else { c.set(W - 1, H - 1, rc); c.set(W - 2, H - 1, rc); c.set(W - 1, H - 2, rc); }
@@ -1030,6 +1036,7 @@ static RGB kelvinToRgb(int k) {
 
 void setMoodlight(JsonVariantConst v) {
   Lock l;
+  reqMqttState = true;
   if (v.isNull() || !v.is<JsonObjectConst>() || v.as<JsonObjectConst>().size() == 0) {
     mood.on = false;
     return;
@@ -1088,9 +1095,27 @@ void setIndicator(int idx, JsonVariantConst v) {
   d.mqttColor = variantColor(v["color"], -1);
   if (d.mqttColor == 0) d.mqttColor = -1;  // black / "0" hides the indicator
   d.blink = v["blink"] | 0;
-  if (!d.blink) d.blink = v["fade"] | 0;
+  d.fade = v["fade"] | 0;
   uint32_t life = v["lifetime"] | 0;
   d.expires = life ? millis() + life * 1000 : 0;
+  reqMqttState = true;
+}
+
+void indicatorState(int idx, int32_t& color, uint16_t& blink, uint16_t& fade) {
+  color = -1;
+  blink = fade = 0;
+  if (idx < 0 || idx >= NUM_INDICATORS) return;
+  Lock l;
+  color = ind[idx].mqttColor;
+  blink = ind[idx].blink;
+  fade = ind[idx].fade;
+}
+
+void moodState(bool& on, uint32_t& color, uint8_t& bri) {
+  Lock l;
+  on = mood.on;
+  color = ((uint32_t)mood.color.r << 16) | (mood.color.g << 8) | mood.color.b;
+  bri = mood.bri;
 }
 
 static bool truthy(String v) {

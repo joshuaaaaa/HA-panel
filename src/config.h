@@ -5,7 +5,7 @@
 #include <freertos/semphr.h>
 
 #define FW_NAME "HA-Panel"
-#define FW_VERSION "1.0.0"
+#define FW_VERSION "1.1.0"
 
 #define MAX_PAGES 24
 #define NUM_INDICATORS 3
@@ -74,6 +74,7 @@ struct Config {
   String mqttUser, mqttPass;
   String mqttTopic;               // base topic, default hapanel/<id>
   bool discovery = true;
+  uint8_t screenInterval = 0;     // s, publish screen image to HA (MQTT image entity), 0 = off
   String discoveryPrefix = "homeassistant";
 
   // --- matrix hardware

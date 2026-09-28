@@ -149,6 +149,7 @@ void configToJson(JsonObject o, bool s) {
   m["user"] = cfg.mqttUser; m["pass"] = secret(cfg.mqttPass, s);
   m["topic"] = cfg.mqttTopic;
   m["discovery"] = cfg.discovery; m["prefix"] = cfg.discoveryPrefix;
+  m["screen"] = cfg.screenInterval;
 
   JsonObject x = o["matrix"].to<JsonObject>();
   x["pin"] = cfg.ledPin; x["width"] = cfg.width; x["height"] = cfg.height;
@@ -218,6 +219,7 @@ uint32_t configFromJson(JsonObjectConst o) {
     updStr(cfg.mqttTopic, m["topic"], c, CFG_CHG_MQTT);
     upd(cfg.discovery, m["discovery"], c, CFG_CHG_MQTT);
     updStr(cfg.discoveryPrefix, m["prefix"], c, CFG_CHG_MQTT);
+    upd(cfg.screenInterval, m["screen"], c, 0);
     while (cfg.mqttTopic.endsWith("/")) cfg.mqttTopic.remove(cfg.mqttTopic.length() - 1);
     if (cfg.mqttTopic.isEmpty()) cfg.mqttTopic = "awtrix_" + deviceId;
   }

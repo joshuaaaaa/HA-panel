@@ -1,0 +1,81 @@
+blueprint:
+  name: HA-Panel – notifikace na LED panel
+  description: >
+    Pošle notifikaci na LED panel HA-Panel (nebo AWTRIX 3) přes MQTT.
+    Vytvoř z blueprintu skript a volej ho z automatizací (action: script.<název>)
+    s poli message, icon, color, duration, repeat, rainbow, hold, wakeup.
+  domain: script
+  input:
+    topic:
+      name: MQTT prefix panelu
+      description: Najdeš ho v kartě panelu nebo ve webu panelu (Nastavení → MQTT), např. awtrix_582a68
+      selector:
+        text: {}
+
+fields:
+  message:
+    name: Text
+    required: true
+    example: Pračka dokončila
+    selector:
+      text: {}
+  icon:
+    name: Ikona
+    description: Název ikony (sunny, bell, washer…) nebo LaMetric ID staženého do panelu
+    example: bell
+    selector:
+      text: {}
+  color:
+    name: Barva textu
+    selector:
+      color_rgb: {}
+  duration:
+    name: Doba zobrazení (s)
+    default: 5
+    selector:
+      number:
+        min: 1
+        max: 120
+  repeat:
+    name: Počet opakování posunu (0 = podle doby)
+    default: 0
+    selector:
+      number:
+        min: 0
+        max: 10
+  rainbow:
+    name: Duhový text
+    default: false
+    selector:
+      boolean: {}
+  hold:
+    name: Držet do potvrzení (tlačítkem nebo „Zavřít notifikaci“)
+    default: false
+    selector:
+      boolean: {}
+  wakeup:
+    name: Probudit vypnutý displej
+    default: true
+    selector:
+      boolean: {}
+
+variables:
+  topic: !input topic
+
+sequence:
+  - action: mqtt.publish
+    data:
+      topic: "{{ topic }}/notify"
+      payload: >
+        {% set msg = {
+          'text': message,
+          'icon': icon | default(''),
+          'color': color | default([255, 255, 255]),
+          'duration': duration | default(5) | int,
+          'rainbow': rainbow | default(false),
+          'hold': hold | default(false),
+          'wakeup': wakeup | default(true)
+        } %}
+        {% if (repeat | default(0) | int) > 0 %}{% set msg = dict(msg, repeat=repeat | int) %}{% endif %}
+        {{ msg | to_json }}
+mode: queued
