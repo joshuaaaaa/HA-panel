@@ -248,10 +248,15 @@ String toUpperUtf8(const String& s) {
 // ================================================================ LED output
 namespace Display {
 
-// WS2812 driver: NeoPixelBus over RMT channel 0 (same driver family as WLED).
+// WS2812 driver: NeoPixelBus (same library and methods as WLED).
 // The bus always sends G,R,B; the configured color order is applied by permuting
 // the channels before they are handed to the bus.
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
+// ESP32-S3: LCD peripheral parallel output - the same method WLED uses on S3
+typedef NeoPixelBus<NeoGrbFeature, NeoEsp32LcdX8Ws2812xMethod> Bus;
+#else
 typedef NeoPixelBus<NeoGrbFeature, NeoEsp32Rmt0Ws2812xMethod> Bus;
+#endif
 
 class Strip {
  public:
@@ -274,6 +279,7 @@ class Strip {
 };
 
 static Strip* strip = nullptr;
+static int stripPin = -1;
 
 static uint8_t gammaTable[256];
 static void initGamma() {
@@ -299,6 +305,7 @@ void begin() {
   initGamma();
   strip = new Strip(nLeds, cfg.ledPin, cfg.colorOrder);
   strip->begin();
+  stripPin = cfg.ledPin;
   // power-on self test: short dim red / green / blue flash of the whole panel
   // (if this does not appear, the problem is wiring / data pin / power, not the settings)
   fillAll(20, 0, 0);
@@ -312,6 +319,33 @@ void begin() {
 
 void rawTest(uint32_t ms) { rawTestUntil = millis() + ms; }
 int fps() { return fpsValue; }
+
+// ---- pin finder: drives every free GPIO in turn (3.5 s each) with dim white
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
+static const int8_t SCAN_PINS[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 21,
+                                   38, 39, 40, 41, 42, 43, 44, 47, 48};
+#elif defined(CONFIG_IDF_TARGET_ESP32C3)
+static const int8_t SCAN_PINS[] = {0, 1, 3, 4, 5, 6, 7, 8, 10, 20, 21};
+#else
+static const int8_t SCAN_PINS[] = {2, 4, 5, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33};
+#endif
+static const int SCAN_COUNT = sizeof(SCAN_PINS) / sizeof(SCAN_PINS[0]);
+static const uint32_t SCAN_STEP_MS = 3500;
+static volatile int scanReq = 0;     // 1 = start, -1 = stop
+static int scanIdx = -1;             // -1 = not scanning
+static uint32_t scanStepStart = 0;
+
+
+static void useStripPin(int pin) {
+  if (pin == stripPin && strip) return;
+  delete strip;
+  strip = new Strip(nLeds, pin, cfg.colorOrder);
+  strip->begin();
+  stripPin = pin;
+}
+
+void pinScan(bool start) { scanReq = start ? 1 : -1; }
+int pinScanCurrent() { return scanIdx >= 0 ? SCAN_PINS[scanIdx] : -1; }
 
 static inline int mapXY(int x, int y) {
   const int W = cfg.width, H = cfg.height;
@@ -333,6 +367,27 @@ void show(const Canvas& c, uint8_t target) {
     fpsValue = fpsCount * 1000 / (nowMs - fpsStart);
     fpsCount = 0;
     fpsStart = nowMs;
+  }
+  // pin finder (runs in the render task so the strip is never used concurrently)
+  if (scanReq) {
+    if (scanReq > 0) { scanIdx = 0; scanStepStart = nowMs; }
+    else { scanIdx = -1; }
+    scanReq = 0;
+    if (scanIdx < 0) { fillAll(0, 0, 0); useStripPin(cfg.ledPin); }
+  }
+  if (scanIdx >= 0) {
+    if (nowMs - scanStepStart >= SCAN_STEP_MS) {
+      fillAll(0, 0, 0);
+      scanStepStart = nowMs;
+      if (++scanIdx >= SCAN_COUNT) {
+        scanIdx = -1;
+        useStripPin(cfg.ledPin);
+        return;
+      }
+    }
+    useStripPin(SCAN_PINS[scanIdx]);
+    fillAll(25, 25, 25);
+    return;
   }
   if ((int32_t)(rawTestUntil - nowMs) > 0) {
     // cycle red / green / blue / white on every LED, fixed low brightness

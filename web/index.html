@@ -138,8 +138,14 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{border-bottom:1px
       <button class="b" id="b-next" title="Další">▶</button>
       <button class="b" id="b-power">⏻ Vypnout</button>
       <button class="b" id="b-test">Testovací obrazec</button>
+      <button class="b" id="b-scan" title="Postupně zkusí všechny volné GPIO – když panel zasvítí, klikni na Použít">Najít pin</button>
       <button class="b" id="b-raw" title="Rozsvítí všechny LED přímo (červená/zelená/modrá/bílá) – obejde nastavení i vypnutí">Test všech LED</button>
       <span class="mut" id="curpage" style="align-self:center"></span>
+    </div>
+    <div class="ctl" id="scanbox" style="display:none">
+      <b id="scaninfo" style="align-self:center"></b>
+      <button class="b p" id="scan-use">Svítí! Použít tento pin</button>
+      <button class="b" id="scan-stop">Zastavit</button>
     </div>
   </div>
   <div class="grid">
@@ -693,6 +699,11 @@ const ctl=b=>api('/api/control',{body:b}).then(loadStatus).catch(e=>toast(e.mess
 $('#b-prev').onclick=()=>ctl({prev:true});$('#b-next').onclick=()=>ctl({next:true});$('#b-sel').onclick=()=>ctl({select:true});
 $('#b-power').onclick=()=>ctl({power:!STATUS.display.power});
 $('#b-test').onclick=()=>api('/api/test',{method:'POST'});
+$('#b-scan').onclick=()=>api('/api/pinscan?start=1',{method:'POST'}).then(()=>{toast('Hledám pin – sleduj panel');scanPoll()});
+let scanT;function scanPoll(){clearInterval(scanT);scanT=setInterval(async()=>{try{const s=await api('/api/status');const p=s.display.scan_pin;
+  $('#scanbox').style.display=p>=0?'flex':'none';$('#scaninfo').textContent='Zkouším GPIO '+p+' (panel by měl svítit bíle)';$('#scan-use').dataset.pin=p;if(p<0){clearInterval(scanT);toast('Hledání dokončeno')}}catch(e){}},400)}
+$('#scan-use').onclick=()=>{const p=$('#scan-use').dataset.pin;if(p<0)return;clearInterval(scanT);api('/api/pinscan?use='+p,{method:'POST'}).then(()=>{toast('Uloženo GPIO '+p+', restartuji…');$('#scanbox').style.display='none';setTimeout(()=>location.reload(),8000)})};
+$('#scan-stop').onclick=()=>{clearInterval(scanT);$('#scanbox').style.display='none';api('/api/pinscan?stop=1',{method:'POST'})};
 $('#b-raw').onclick=()=>api('/api/test?raw=1',{method:'POST'}).then(()=>toast('Všechny LED by teď měly 10 s měnit barvu'));
 $('#c-bright').oninput=e=>$('#brv').textContent=e.target.value;
 $('#c-bright').onchange=e=>ctl({brightness:+e.target.value,auto_bright:false});

@@ -125,7 +125,7 @@ Ve složce [`firmware/`](firmware/) jsou připravené obrazy:
 
 | Soubor | Deska |
 |---|---|
-| `hapanel-esp32-s3-factory.bin` | ESP32-S3 DevKitC-1 (8 MB+ flash) |
+| `hapanel-esp32-s3-factory.bin` | jakákoli ESP32-S3 deska (4 MB+ flash) |
 | `hapanel-esp32dev-factory.bin` | ESP32 DevKit / WROOM-32 |
 | `hapanel-esp32-c3-factory.bin` | ESP32-C3 |
 | `hapanel-ulanzi-tc001-factory.bin` | Ulanzi TC001 |
@@ -279,6 +279,8 @@ firmware/              hotové binární soubory
 ```
 
 ## Řešení problémů
+- **Nevíš, na kterém pinu panel je** → na přehledu tlačítko **Najít pin**: firmware postupně zkouší
+  všechna volná GPIO (každé 3,5 s, bílé světlo). Když panel zasvítí, klikni *Použít tento pin*.
 - **Po nahrání nic nesvítí** → po zapnutí panel vždy krátce blikne červeně, zeleně a modře
   (test ještě před Wi-Fi). Když neblikne, jde o zapojení: datový vodič musí jít do **DIN**
   (šipky na panelu vedou *od* vstupu), GND desky a panelu spojené, správné GPIO

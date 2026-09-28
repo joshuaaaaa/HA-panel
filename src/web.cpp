@@ -95,6 +95,7 @@ static void statusJson(JsonObject o) {
   d["current_ma"] = Display::estimatedCurrent();
   d["fps"] = Display::fps();
   d["led_pin"] = cfg.ledPin;
+  d["scan_pin"] = Display::pinScanCurrent();
   d["leds"] = Display::ledCount();
   d["ldr_raw"] = Hw::ldrRaw();
   d["text_color"] = colorToHex(cfg.textColor);
@@ -319,6 +320,25 @@ static void routes() {
     if (!auth(r)) return;
     if (r->hasParam("raw")) Display::rawTest(10000);
     else Apps::showTest(15000);
+    sendOk(r);
+  });
+
+  // pin finder: POST /api/pinscan?start=1 | ?stop=1 | ?use=<gpio>
+  server.on("/api/pinscan", HTTP_POST, [](AsyncWebServerRequest* r) {
+    if (!auth(r)) return;
+    if (r->hasParam("use")) {
+      int pin = r->getParam("use")->value().toInt();
+      Display::pinScan(false);
+      {
+        Lock l;
+        cfg.ledPin = pin;
+      }
+      reqSaveConfig = true;
+      sendOk(r, true, "saved, rebooting");
+      reqReboot = true;
+      return;
+    }
+    Display::pinScan(!r->hasParam("stop"));
     sendOk(r);
   });
 

@@ -51,4 +51,6 @@ uint16_t estimatedCurrent();
 int ledCount();
 int fps();                      // frames pushed to the LEDs per second
 void rawTest(uint32_t ms);      // light all LEDs directly (bypasses layout, brightness, power)
+void pinScan(bool start);       // try every free GPIO in turn (dim white, 3.5 s each)
+int pinScanCurrent();           // GPIO currently tested, -1 = not scanning
 }
