@@ -49,4 +49,6 @@ void show(const Canvas& c, uint8_t brightness);
 uint8_t currentBrightness();
 uint16_t estimatedCurrent();
 int ledCount();
+int fps();                      // frames pushed to the LEDs per second
+void rawTest(uint32_t ms);      // light all LEDs directly (bypasses layout, brightness, power)
 }

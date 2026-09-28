@@ -279,6 +279,17 @@ firmware/              hotové binární soubory
 ```
 
 ## Řešení problémů
+- **Po nahrání nic nesvítí** → po zapnutí panel vždy krátce blikne červeně, zeleně a modře
+  (test ještě před Wi-Fi). Když neblikne, jde o zapojení: datový vodič musí jít do **DIN**
+  (šipky na panelu vedou *od* vstupu), GND desky a panelu spojené, správné GPIO
+  (*Nastavení → Matice → Datový pin*, po změně restart). Tlačítko **Test všech LED** na přehledu
+  rozsvítí celý panel bez ohledu na ostatní nastavení.
+- **Po nahrání přes esptool-js deska „nežije“ / není vidět Wi-Fi** → desky s nativním USB (ESP32-S3,
+  C3) po nahrání často zůstanou v režimu nahrávání. Odpoj a znovu připoj USB (nebo stiskni RESET).
+- **Opětovné nahrání nesmaže nastavení** → pokud už byla zadaná domácí Wi-Fi, panel se připojí
+  do ní a vlastní síť `HA-Panel-…` nevytvoří. Najdeš ho na IP adrese v routeru nebo na
+  `http://hapanel-xxxxxx.local`. Úplné smazání: v esptool-js *Erase Flash* a pak nahrát znovu.
+- **Výpis z desky (log)** → v esptool-js záložka *Console*, 115200 Bd (ESP32-S3 vypisuje přes USB).
 - **Na displeji je obraz zrcadlený / rozházený** → *Nastavení → Matice*, testovací obrazec, upravit orientaci.
 - **Barvy nesedí (červená je zelená)** → pořadí barev `GRB` ↔ `RGB`.
 - **Panel bliká / první LED svítí náhodně** → společná zem, rezistor 330 Ω, převodník úrovní.

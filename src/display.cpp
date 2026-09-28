@@ -262,13 +262,33 @@ static neoPixelType orderType(const String& o) {
   return NEO_GRB;
 }
 
-void begin() {
-  nLeds = cfg.width * cfg.height;
-  strip = new Adafruit_NeoPixel(nLeds, cfg.ledPin, orderType(cfg.colorOrder) + NEO_KHZ800);
-  strip->begin();
-  strip->clear();
+static volatile uint32_t rawTestUntil = 0;
+static uint32_t fpsCount = 0, fpsStart = 0;
+static int fpsValue = 0;
+
+static void fillAll(uint8_t r, uint8_t g, uint8_t b) {
+  for (int i = 0; i < nLeds; i++) strip->setPixelColor(i, r, g, b);
   strip->show();
 }
+
+void begin() {
+  nLeds = cfg.width * cfg.height;
+  Serial.printf("[led] %d LEDs on GPIO%d, order %s\n", nLeds, cfg.ledPin, cfg.colorOrder.c_str());
+  strip = new Adafruit_NeoPixel(nLeds, cfg.ledPin, orderType(cfg.colorOrder) + NEO_KHZ800);
+  strip->begin();
+  // power-on self test: short dim red / green / blue flash of the whole panel
+  // (if this does not appear, the problem is wiring / data pin / power, not the settings)
+  fillAll(20, 0, 0);
+  delay(300);
+  fillAll(0, 20, 0);
+  delay(300);
+  fillAll(0, 0, 20);
+  delay(300);
+  fillAll(0, 0, 0);
+}
+
+void rawTest(uint32_t ms) { rawTestUntil = millis() + ms; }
+int fps() { return fpsValue; }
 
 static inline int mapXY(int x, int y) {
   const int W = cfg.width, H = cfg.height;
@@ -284,6 +304,20 @@ static inline int mapXY(int x, int y) {
 
 void show(const Canvas& c, uint8_t target) {
   if (!strip) return;
+  uint32_t nowMs = millis();
+  fpsCount++;
+  if (nowMs - fpsStart >= 1000) {
+    fpsValue = fpsCount * 1000 / (nowMs - fpsStart);
+    fpsCount = 0;
+    fpsStart = nowMs;
+  }
+  if ((int32_t)(rawTestUntil - nowMs) > 0) {
+    // cycle red / green / blue / white on every LED, fixed low brightness
+    static const uint8_t cols[4][3] = {{40, 0, 0}, {0, 40, 0}, {0, 0, 40}, {25, 25, 25}};
+    const uint8_t* k = cols[(nowMs / 700) % 4];
+    fillAll(k[0], k[1], k[2]);
+    return;
+  }
   // smooth brightness changes
   if (curBright < target) curBright += max(1, (target - curBright) / 6);
   else if (curBright > target) curBright -= max(1, (curBright - target) / 6);

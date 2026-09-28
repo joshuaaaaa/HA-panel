@@ -93,6 +93,9 @@ static void statusJson(JsonObject o) {
   d["night_enabled"] = cfg.nightEnabled;
   d["current_brightness"] = Display::currentBrightness();
   d["current_ma"] = Display::estimatedCurrent();
+  d["fps"] = Display::fps();
+  d["led_pin"] = cfg.ledPin;
+  d["leds"] = Display::ledCount();
   d["ldr_raw"] = Hw::ldrRaw();
   d["text_color"] = colorToHex(cfg.textColor);
   Apps::statusJson(o["apps"].to<JsonObject>());
@@ -314,7 +317,8 @@ static void routes() {
 
   server.on("/api/test", HTTP_POST, [](AsyncWebServerRequest* r) {
     if (!auth(r)) return;
-    Apps::showTest(15000);
+    if (r->hasParam("raw")) Display::rawTest(10000);
+    else Apps::showTest(15000);
     sendOk(r);
   });
 

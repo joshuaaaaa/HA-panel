@@ -138,6 +138,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{border-bottom:1px
       <button class="b" id="b-next" title="Další">▶</button>
       <button class="b" id="b-power">⏻ Vypnout</button>
       <button class="b" id="b-test">Testovací obrazec</button>
+      <button class="b" id="b-raw" title="Rozsvítí všechny LED přímo (červená/zelená/modrá/bílá) – obejde nastavení i vypnutí">Test všech LED</button>
       <span class="mut" id="curpage" style="align-self:center"></span>
     </div>
   </div>
@@ -334,7 +335,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{border-bottom:1px
       <p class="hint">Při napájení přes desku teče proud panelu přes USB konektor a dráhy desky – drž limit do ~1 A.</p>
       <label class="sw"><input type="checkbox" name="matrix.gamma"><i></i>Gama korekce (věrnější barvy)</label>
       <p class="hint">Testovací obrazec: <b style="color:#f33">červená</b> = vlevo nahoře, <b style="color:#3f3">zelená</b> = vpravo nahoře, <b style="color:#39f">modrá</b> = vlevo dole, bílá = vpravo dole. Pin, rozměr a pořadí barev se projeví po restartu.</p>
-      <div class="row"><button class="b p">Uložit</button><button type="button" class="b" data-act="test">Testovací obrazec</button></div>
+      <div class="row"><button class="b p">Uložit</button><button type="button" class="b" data-act="test">Testovací obrazec</button><button type="button" class="b" data-act="raw">Test všech LED</button></div>
     </form>
 
     <form class="card" data-form>
@@ -674,7 +675,7 @@ async function loadStatus(){
   $('#b-power').textContent=d.power?'⏻ Vypnout':'⏻ Zapnout';
   $('#curpage').textContent=(s.apps.notification?'🔔 notifikace · ':'')+(s.apps.page?'Stránka: '+s.apps.page:'')+(s.apps.night?' · 🌙 noc':'');
   $('#stat').innerHTML=[['IP',s.wifi.ip],['Čas',s.time_valid?s.time:'nesynchronizováno'],['Běží',fmtUp(s.uptime)],['Paměť',Math.round(s.heap/1024)+' kB volno'],
-    ['Jas',d.current_brightness+' / 255'],['Odběr (odhad)',d.current_ma+' mA'],['HA',s.ha.state+(s.ha.error?' – '+s.ha.error:'')+(s.ha.connected?' ('+s.ha.subscriptions+' šablon)':'')],
+    ['Displej',d.fps+' fps · '+d.leds+' LED na GPIO'+d.led_pin],['Jas',d.current_brightness+' / 255'],['Odběr (odhad)',d.current_ma+' mA'],['HA',s.ha.state+(s.ha.error?' – '+s.ha.error:'')+(s.ha.connected?' ('+s.ha.subscriptions+' šablon)':'')],
     ['MQTT',s.mqtt.enabled?(s.mqtt.connected?'připojeno':'odpojeno '+(s.mqtt.error||'')):'vypnuto']].map(([k,v])=>`<b>${k}</b><span>${esc(v)}</span>`).join('');
   $('#ha-stat').innerHTML=`<b>Stav</b><span>${esc(s.ha.state)} ${esc(s.ha.error||'')}</span><b>Šablon</b><span>${s.ha.subscriptions}</span>`;
   $('#ldrraw').textContent=d.ldr_raw;
@@ -692,6 +693,7 @@ const ctl=b=>api('/api/control',{body:b}).then(loadStatus).catch(e=>toast(e.mess
 $('#b-prev').onclick=()=>ctl({prev:true});$('#b-next').onclick=()=>ctl({next:true});$('#b-sel').onclick=()=>ctl({select:true});
 $('#b-power').onclick=()=>ctl({power:!STATUS.display.power});
 $('#b-test').onclick=()=>api('/api/test',{method:'POST'});
+$('#b-raw').onclick=()=>api('/api/test?raw=1',{method:'POST'}).then(()=>toast('Všechny LED by teď měly 10 s měnit barvu'));
 $('#c-bright').oninput=e=>$('#brv').textContent=e.target.value;
 $('#c-bright').onchange=e=>ctl({brightness:+e.target.value,auto_bright:false});
 $('#c-autob').onchange=e=>ctl({auto_bright:e.target.checked});
@@ -915,6 +917,7 @@ $$('form[data-form]').forEach(f=>f.addEventListener('submit',async e=>{e.prevent
     else toast('Uloženo')}catch(err){toast('Chyba: '+err.message,1)}}));
 $('#pwrpreset').onchange=e=>{if(e.target.value)$('[name="matrix.max_current"]').value=e.target.value};
 $$('[data-act=test]').forEach(b=>b.onclick=()=>api('/api/test',{method:'POST'}));
+$$('[data-act=raw]').forEach(b=>b.onclick=()=>api('/api/test?raw=1',{method:'POST'}));
 $('#hwpreset').onchange=e=>{const v=e.target.value,s=(n,val)=>{const el=$(`[name="${n}"]`);if(el.type==='checkbox')el.checked=val;else el.value=val};
   if(v==='flex'){s('matrix.width',32);s('matrix.height',8);s('matrix.vertical',true);s('matrix.serpentine',true);s('matrix.start_right',false);s('matrix.start_bottom',false);s('matrix.order','GRB')}
   if(v==='rows'){s('matrix.vertical',false);s('matrix.serpentine',true);s('matrix.start_right',false);s('matrix.start_bottom',false)}
