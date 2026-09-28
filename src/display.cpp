@@ -147,6 +147,44 @@ static void drawAccent(Canvas& c, int x, int w, int yTop, uint8_t accent, RGB co
 }
 
 int drawText(Canvas& c, int x, int y, const String& s, RGB color, Clip clip, bool rainbow, uint8_t hue0) {
+  if (rainbow) return drawTextFn(c, x, y, s, [hue0](int n) { return hsv(hue0 + n * 24); }, clip);
+  return drawTextFn(c, x, y, s, [color](int) { return color; }, clip);
+}
+
+int charCount(const String& s) {
+  int i = 0, n = 0;
+  while (i < (int)s.length()) { nextCodepoint(s, i); n++; }
+  return n;
+}
+
+void drawLine(Canvas& c, int x0, int y0, int x1, int y1, RGB col) {
+  int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1, dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1, err = dx + dy;
+  for (;;) {
+    c.set(x0, y0, col);
+    if (x0 == x1 && y0 == y1) break;
+    int e2 = 2 * err;
+    if (e2 >= dy) { err += dy; x0 += sx; }
+    if (e2 <= dx) { err += dx; y0 += sy; }
+  }
+}
+
+void drawRect(Canvas& c, int x, int y, int w, int h, RGB col) {
+  if (w <= 0 || h <= 0) return;
+  drawLine(c, x, y, x + w - 1, y, col);
+  drawLine(c, x, y + h - 1, x + w - 1, y + h - 1, col);
+  drawLine(c, x, y, x, y + h - 1, col);
+  drawLine(c, x + w - 1, y, x + w - 1, y + h - 1, col);
+}
+
+void drawCircle(Canvas& c, int cx, int cy, int r, RGB col, bool fill) {
+  for (int y = -r; y <= r; y++)
+    for (int x = -r; x <= r; x++) {
+      int d = x * x + y * y;
+      if (fill ? d <= r * r + r : (d <= r * r + r && d >= r * r - r)) c.set(cx + x, cy + y, col);
+    }
+}
+
+int drawTextFn(Canvas& c, int x, int y, const String& s, const std::function<RGB(int)>& colorAt, Clip clip) {
   int i = 0, cx = x, n = 0;
   Glyph5 g;
   while (i < (int)s.length()) {
@@ -157,7 +195,7 @@ int drawText(Canvas& c, int x, int y, const String& s, RGB color, Clip clip, boo
       n++;
       continue;
     }
-    RGB col = rainbow ? hsv(hue0 + n * 24) : color;
+    RGB col = colorAt(n);
     if (cx + g.w >= clip.x0) {
       for (int row = 0; row < 5; row++) {
         uint8_t bits = g.rows[row];
@@ -351,6 +389,9 @@ static inline int mapXY(int x, int y) {
   const int W = cfg.width, H = cfg.height;
   if (cfg.startRight) x = W - 1 - x;
   if (cfg.startBottom) y = H - 1 - y;
+  if (cfg.tiled) {  // 8x8 tiles side by side, each row progressive (AWTRIX layout 1)
+    return (x / 8) * 64 + y * 8 + (x % 8);
+  }
   if (cfg.vertical) {
     if (cfg.serpentine && (x & 1)) y = H - 1 - y;
     return x * H + y;

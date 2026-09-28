@@ -14,6 +14,11 @@
 #include "icons.h"
 #include "mqtt.h"
 #include "web_index.h"
+#include "awtrix.h"
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+#include <vector>
+#include <functional>
 
 namespace Web {
 
@@ -50,6 +55,81 @@ static AsyncCallbackJsonWebHandler* jsonPost(const char* uri, ArJsonRequestHandl
   h->setMaxContentLength(maxLen);
   server.addHandler(h);
   return h;
+}
+
+// POST handler with a raw body (empty, plain text or JSON) - the way AWTRIX accepts requests
+typedef std::function<void(AsyncWebServerRequest*, JsonVariantConst)> RawJsonFn;
+static void rawPost(const char* uri, RawJsonFn fn) {
+  server.on(
+      uri, HTTP_POST,
+      [fn](AsyncWebServerRequest* r) {
+        if (!auth(r)) return;
+        JsonDocument d;
+        const char* body = (const char*)r->_tempObject;
+        if (body && *body) {
+          String b(body);
+          b.trim();
+          if (b.startsWith("{") || b.startsWith("[")) {
+            if (deserializeJson(d, b)) return sendOk(r, false, "invalid JSON");
+          } else if (b.length()) {
+            d.set(b);
+          }
+        }
+        fn(r, d.as<JsonVariantConst>());
+      },
+      nullptr,
+      [](AsyncWebServerRequest* r, uint8_t* data, size_t len, size_t index, size_t total) {
+        if (total > 48 * 1024) return;
+        if (index == 0) r->_tempObject = calloc(total + 1, 1);
+        char* b = (char*)r->_tempObject;
+        if (b && index + len <= total) memcpy(b + index, data, len);
+      });
+}
+
+// LaMetric icon download job (executed by loop())
+static int lmId = -1;
+static uint8_t lmState = 0;  // 0 idle, 1 pending, 2 done, 3 error
+static std::vector<uint8_t> lmData;
+static String lmType;
+
+static void lametricJob() {
+  int id;
+  {
+    Lock l;
+    if (lmState != 1) return;
+    id = lmId;
+  }
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  http.setTimeout(8000);
+  std::vector<uint8_t> data;
+  String type;
+  bool ok = false;
+  if (http.begin(client, "https://developer.lametric.com/content/apps/icon_thumbs/" + String(id))) {
+    const char* keys[] = {"Content-Type"};
+    http.collectHeaders(keys, 1);
+    int code = http.GET();
+    if (code == 200) {
+      type = http.header("Content-Type");
+      WiFiClient* st = http.getStreamPtr();
+      int len = http.getSize();
+      uint32_t t0 = millis();
+      while (http.connected() && (len < 0 || (int)data.size() < len) && data.size() < 64 * 1024 && millis() - t0 < 8000) {
+        uint8_t buf[512];
+        int n = st->readBytes(buf, min<size_t>(sizeof(buf), st->available() ? st->available() : 1));
+        if (n > 0) data.insert(data.end(), buf, buf + n);
+        else delay(5);
+      }
+      ok = !data.empty();
+    }
+    http.end();
+  }
+  Lock l;
+  if (lmId != id) return;
+  lmData = std::move(data);
+  lmType = type.length() ? type : "image/gif";
+  lmState = ok ? 2 : 3;
 }
 
 static void statusJson(JsonObject o) {
@@ -271,20 +351,16 @@ static void routes() {
     sendDoc(r, d);
   });
 
-  jsonPost("/api/notify", [](AsyncWebServerRequest* r, JsonVariant& j) {
-    if (!auth(r)) return;
+  // ------------------------------------------------ AWTRIX 3 compatible API
+  // (body may be empty, plain text or JSON, with or without Content-Type - like AWTRIX)
+  rawPost("/api/notify/dismiss", [](AsyncWebServerRequest* r, JsonVariantConst) { sendOk(r, Apps::dismiss()); });
+  rawPost("/api/notify", [](AsyncWebServerRequest* r, JsonVariantConst j) {
     Apps::notify(j);
     sendOk(r);
   });
-
-  server.on("/api/dismiss", HTTP_POST, [](AsyncWebServerRequest* r) {
-    if (!auth(r)) return;
-    sendOk(r, Apps::dismiss());
-  });
-
-  // custom page: POST /api/custom?name=x with JSON body; empty body / {} removes
-  jsonPost("/api/custom", [](AsyncWebServerRequest* r, JsonVariant& j) {
-    if (!auth(r)) return;
+  rawPost("/api/dismiss", [](AsyncWebServerRequest* r, JsonVariantConst) { sendOk(r, Apps::dismiss()); });
+  // custom app: POST /api/custom?name=x (JSON object or array), empty body removes
+  rawPost("/api/custom", [](AsyncWebServerRequest* r, JsonVariantConst j) {
     if (!r->hasParam("name")) return sendOk(r, false, "name missing");
     Apps::setCustom(r->getParam("name")->value(), j);
     sendOk(r);
@@ -302,12 +378,75 @@ static void routes() {
     Apps::customList(d.to<JsonArray>());
     sendDoc(r, d);
   });
-
-  jsonPost("/api/indicator", [](AsyncWebServerRequest* r, JsonVariant& j) {
-    if (!auth(r)) return;
+  for (int i = 1; i <= NUM_INDICATORS; i++) {
+    static char uris[NUM_INDICATORS][20];
+    snprintf(uris[i - 1], sizeof(uris[0]), "/api/indicator%d", i);
+    rawPost(uris[i - 1], [i](AsyncWebServerRequest* r, JsonVariantConst j) {
+      Apps::setIndicator(i - 1, j);
+      sendOk(r);
+    });
+  }
+  rawPost("/api/indicator", [](AsyncWebServerRequest* r, JsonVariantConst j) {
     int n = r->hasParam("n") ? r->getParam("n")->value().toInt() : (j["n"] | 1);
     Apps::setIndicator(n - 1, j);
     sendOk(r);
+  });
+  static const char* const AW_CMDS[] = {"power", "sleep", "moodlight", "switch", "nextapp", "previousapp", "sound",
+                                         "rtttl"};
+  for (auto cmd : AW_CMDS) {
+    static char uris[8][24];
+    static int k = 0;
+    snprintf(uris[k], sizeof(uris[0]), "/api/%s", cmd);
+    String c = cmd;
+    rawPost(uris[k++], [c](AsyncWebServerRequest* r, JsonVariantConst j) { sendOk(r, Awtrix::command(c, j)); });
+  }
+  rawPost("/api/settings", [](AsyncWebServerRequest* r, JsonVariantConst j) {
+    Awtrix::applySettings(j);
+    sendOk(r);
+  });
+  server.on("/api/settings", HTTP_GET, [](AsyncWebServerRequest* r) {
+    if (!auth(r)) return;
+    JsonDocument d;
+    Awtrix::settings(d.to<JsonObject>());
+    sendDoc(r, d);
+  });
+  server.on("/api/stats", HTTP_GET, [](AsyncWebServerRequest* r) {
+    JsonDocument d;
+    Awtrix::stats(d.to<JsonObject>());
+    sendDoc(r, d);
+  });
+  server.on("/api/loop", HTTP_GET, [](AsyncWebServerRequest* r) {
+    JsonDocument d;
+    Apps::loopJson(d.to<JsonObject>());
+    sendDoc(r, d);
+  });
+  server.on("/api/transitions", HTTP_GET, [](AsyncWebServerRequest* r) {
+    JsonDocument d;
+    Awtrix::transitions(d.to<JsonArray>());
+    sendDoc(r, d);
+  });
+  server.on("/api/screen", HTTP_GET, [](AsyncWebServerRequest* r) {
+    JsonDocument d;
+    Awtrix::screen(d.to<JsonArray>());
+    sendDoc(r, d);
+  });
+  // LaMetric icon proxy for the icon editor: GET /api/lametric?id=1234 (202 while downloading)
+  server.on("/api/lametric", HTTP_GET, [](AsyncWebServerRequest* r) {
+    if (!auth(r)) return;
+    if (!r->hasParam("id")) return sendOk(r, false, "id missing");
+    int id = r->getParam("id")->value().toInt();
+    Lock l;
+    if (lmId == id && lmState == 2) {
+      AsyncResponseStream* rs = r->beginResponseStream(lmType.c_str());
+      rs->write(lmData.data(), lmData.size());
+      return r->send(rs);
+    }
+    if (lmId == id && lmState == 3) return r->send(404, "text/plain", "icon not found");
+    if (!(lmId == id && lmState == 1)) {
+      lmId = id;
+      lmState = 1;
+    }
+    r->send(202, "text/plain", "pending");
   });
 
   jsonPost("/api/control", [](AsyncWebServerRequest* r, JsonVariant& j) {
@@ -471,6 +610,7 @@ void begin() {
 
 void loop() {
   static uint32_t lastFrame = 0, lastClean = 0, lastFrameNo = 0;
+  lametricJob();
   uint32_t now = millis();
   if (wsPreview.count() > 0 && now - lastFrame > 80) {
     lastFrame = now;

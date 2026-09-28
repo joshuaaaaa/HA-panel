@@ -5,6 +5,7 @@
 #include "effects.h"
 #include "ha_client.h"
 #include "icons.h"
+#include <vector>
 
 namespace Apps {
 
@@ -21,23 +22,48 @@ struct PageRt {
   int progress = -1;
 };
 
-struct Notif {
-  String text, icon, effect;
-  int32_t color = -1, progressColor = -1;
-  uint32_t durationMs = 5000;
-  uint8_t repeat = 1;
-  bool rainbow = false, hold = false, wakeup = false;
-  int progress = -1;
+// A notification or a custom app pushed over MQTT / HTTP (AWTRIX 3 compatible format)
+struct Frag {
+  String t;
+  int32_t c;
+  Frag(const String& t_ = String(), int32_t c_ = -1) : t(t_), c(c_) {}
 };
 
-struct CustomPage {
+struct DrawCmd {
+  uint8_t op = 0;  // 1 dp, 2 dl, 3 dr, 4 df, 5 dc, 6 dfc, 7 dt, 8 db
+  int16_t v[4] = {0, 0, 0, 0};
+  int32_t col = 0xFFFFFF;
+  String text;
+  std::vector<uint32_t> bmp;
+};
+
+struct AppMsg {
   bool used = false;
-  String name, text, icon, effect;
-  int32_t color = -1, progressColor = -1;
+  String name;
+  std::vector<Frag> text;
+  String icon, effect;
+  int32_t color = -1, background = -1, progressColor = -1, progressBg = -1, barBg = -1;
+  int32_t grad1 = -1, grad2 = -1;
+  bool rainbow = false, hold = false, wakeup = false, noScroll = false, center = true, topText = false;
+  bool autoscale = true;
+  uint8_t textCase = 0;  // 0 global, 1 upper, 2 as sent
+  int16_t textOffset = 0;
+  uint16_t blinkText = 0, fadeText = 0, scrollPct = 100;
+  int repeat = -1;
+  uint32_t durationMs = 0;  // 0 = default
   int progress = -1;
-  uint16_t duration = 8;
-  uint32_t expires = 0;  // millis, 0 = never
-  bool rainbow = false;
+  std::vector<int16_t> bar, line;
+  std::vector<DrawCmd> draw;
+  uint32_t expires = 0;      // millis, 0 = never
+  uint8_t lifetimeMode = 0;  // 0 delete, 1 mark stale
+  uint32_t lifetimeMs = 0;
+  bool stale = false;
+
+  String plainText() const {
+    String s;
+    for (auto& f : text) s += f.t;
+    return s;
+  }
 };
 
 struct Indicator {
@@ -63,13 +89,20 @@ struct RenderInfo {
 };
 
 static const int MAX_NOTIF = 10;
-static const int MAX_CUSTOM = 8;
+static const int MAX_CUSTOM = 16;
 
 static PageRt rt[MAX_PAGES];
-static Notif queue[MAX_NOTIF];
+static AppMsg queue[MAX_NOTIF];
 static int qLen = 0;
-static Notif curNotif;
-static CustomPage custom[MAX_CUSTOM];
+static AppMsg curNotif;
+static AppMsg custom[MAX_CUSTOM];
+
+struct Mood {
+  bool on = false;
+  RGB color = RGB(255, 180, 100);
+  uint8_t bri = 100;
+};
+static Mood mood;
 static Indicator ind[NUM_INDICATORS];
 
 static Slot cur, resumeSlot;
@@ -141,8 +174,12 @@ static bool pageShown(int i) {
 static bool customShown(int i) {
   if (i < 0 || i >= MAX_CUSTOM || !custom[i].used) return false;
   if (custom[i].expires && (int32_t)(millis() - custom[i].expires) >= 0) {
-    custom[i].used = false;
-    return false;
+    if (custom[i].lifetimeMode == 1) {
+      custom[i].stale = true;  // keep it, draw a red frame
+    } else {
+      custom[i] = AppMsg();
+      return false;
+    }
   }
   if (isNight() && cfg.nightClockOnly) return false;
   return true;
@@ -209,6 +246,7 @@ struct Content {
   bool weekday = false;
   bool calendar = false;
   int calendarDay = 0;
+  const AppMsg* msg = nullptr;  // extra AWTRIX features (fragments, charts, drawing...)
 };
 
 static RGB colorOr(int32_t c, int32_t def) { return RGB((uint32_t)(c >= 0 ? c : def)); }
@@ -295,26 +333,19 @@ static void buildContent(const Slot& s, Content& ct) {
       }
       break;
     }
-    case SK_CUSTOM: {
-      const CustomPage& c = custom[s.idx];
-      ct.icon = c.icon;
-      ct.text = c.text;
-      ct.effect = c.effect;
-      ct.color = colorOr(c.color, defColor);
-      ct.rainbow = c.rainbow;
-      ct.progress = c.progress;
-      if (c.progressColor >= 0) ct.progressColor = RGB((uint32_t)c.progressColor);
+    case SK_CUSTOM:
+    case SK_NOTIF: {
+      const AppMsg& m = s.kind == SK_CUSTOM ? custom[s.idx] : curNotif;
+      ct.msg = &m;
+      ct.icon = m.icon;
+      ct.text = m.plainText();
+      ct.effect = m.effect;
+      ct.color = colorOr(m.color, defColor);
+      ct.rainbow = m.rainbow;
+      ct.progress = m.progress;
+      if (m.progressColor >= 0) ct.progressColor = RGB((uint32_t)m.progressColor);
       break;
     }
-    case SK_NOTIF:
-      ct.icon = curNotif.icon;
-      ct.text = curNotif.text;
-      ct.effect = curNotif.effect;
-      ct.color = colorOr(curNotif.color, defColor);
-      ct.rainbow = curNotif.rainbow;
-      ct.progress = curNotif.progress;
-      if (curNotif.progressColor >= 0) ct.progressColor = RGB((uint32_t)curNotif.progressColor);
-      break;
     case SK_FALLBACK:
     default:
       ct.big = true;
@@ -323,7 +354,8 @@ static void buildContent(const Slot& s, Content& ct) {
       ct.weekday = cfg.weekdayBar;
       break;
   }
-  if (cfg.uppercase && !ct.big) ct.text = toUpperUtf8(ct.text);
+  uint8_t tc = ct.msg ? ct.msg->textCase : 0;
+  if (!ct.big && (tc == 1 || (tc == 0 && cfg.uppercase))) ct.text = toUpperUtf8(ct.text);
   if (isNight() && cfg.nightColor >= 0) {
     ct.color = RGB((uint32_t)cfg.nightColor);
     ct.rainbow = false;
@@ -358,12 +390,68 @@ static void drawWeekday(Canvas& c, int x0, int x1) {
   }
 }
 
+// charts: AWTRIX style bar graph / line chart in the area x0..x1
+static void drawChart(Canvas& c, const AppMsg& m, int x0, int x1, bool line) {
+  const std::vector<int16_t>& v = line ? m.line : m.bar;
+  if (v.empty()) return;
+  int area = x1 - x0 + 1, H = c.h;
+  int n = min<int>(v.size(), line ? area : (area + 1) / 2);
+  const int16_t* d = v.data() + (v.size() - n);  // newest values
+  int vmax = 1, vmin = 0;
+  for (int i = 0; i < n; i++) { vmax = max<int>(vmax, d[i]); vmin = min<int>(vmin, d[i]); }
+  auto scale = [&](int val) {
+    if (!m.autoscale) return constrain(val, 0, H);
+    return (int)((long)(val - vmin) * H / max(1, vmax - vmin));
+  };
+  RGB col = RGB((uint32_t)(m.color >= 0 ? m.color : cfg.textColor));
+  if (line) {
+    int px = -1, py = -1;
+    for (int i = 0; i < n; i++) {
+      int x = x0 + (n > 1 ? (long)i * (area - 1) / (n - 1) : 0);
+      int y = H - 1 - min(H - 1, scale(d[i]));
+      if (px >= 0) drawLine(c, px, py, x, y, col);
+      else c.set(x, y, col);
+      px = x;
+      py = y;
+    }
+  } else {
+    int bw = max(1, (area - (n - 1)) / n);
+    for (int i = 0; i < n; i++) {
+      int x = x0 + i * (bw + 1);
+      int h = scale(d[i]);
+      if (m.barBg >= 0) c.fillRect(x, 0, bw, H, RGB((uint32_t)m.barBg));
+      c.fillRect(x, H - h, bw, h, col);
+    }
+  }
+}
+
+static void drawCommands(Canvas& c, const AppMsg& m) {
+  for (const DrawCmd& d : m.draw) {
+    RGB col((uint32_t)d.col);
+    switch (d.op) {
+      case 1: c.set(d.v[0], d.v[1], col); break;
+      case 2: drawLine(c, d.v[0], d.v[1], d.v[2], d.v[3], col); break;
+      case 3: drawRect(c, d.v[0], d.v[1], d.v[2], d.v[3], col); break;
+      case 4: c.fillRect(d.v[0], d.v[1], d.v[2], d.v[3], col); break;
+      case 5: drawCircle(c, d.v[0], d.v[1], d.v[2], col, false); break;
+      case 6: drawCircle(c, d.v[0], d.v[1], d.v[2], col, true); break;
+      case 7: drawText(c, d.v[0], d.v[1], d.text, col, {0, c.w - 1}); break;
+      case 8:
+        for (int i = 0; i < (int)d.bmp.size() && i < d.v[2] * d.v[3]; i++)
+          c.set(d.v[0] + i % d.v[2], d.v[1] + i / d.v[2], RGB(d.bmp[i]));
+        break;
+    }
+  }
+}
+
 static RenderInfo renderContent(Canvas& c, const Slot& s, uint32_t now) {
   RenderInfo info;
   Content ct;
   buildContent(s, ct);
+  const AppMsg* m = ct.msg;
   c.clear();
   uint32_t elapsed = now - s.start;
+  if (m && m->background >= 0) c.fillRect(0, 0, c.w, c.h, RGB((uint32_t)m->background));
   if (ct.effect.length()) Effects::render(c, ct.effect, now);
 
   int x0 = 0;
@@ -387,39 +475,80 @@ static RenderInfo renderContent(Canvas& c, const Slot& s, uint32_t now) {
       for (int x = x0; x <= x1; x++) c.set(x, y, c.get(x, y).scale(50));
   }
 
-  if (ct.big) {
+  bool chart = m && (!m->bar.empty() || !m->line.empty());
+  if (chart) {
+    drawChart(c, *m, x0, x1, m->bar.empty());
+  } else if (ct.big) {
     int tw = bigTextWidth(ct.text);
     int y = bottomBar ? 0 : (c.h - 7) / 2;
     drawBigText(c, x0 + (area - tw + 1) / 2, y, ct.text, ct.color, {x0, x1}, ct.colonMask);
   } else if (ct.text.length()) {
     int tw = textWidth(ct.text);
-    int y = cfg.textY + (c.h - 8) / 2;
+    int y = (m && m->topText) ? 0 : cfg.textY + (c.h - 8) / 2;
     uint8_t hue = now / 10;
-    if (tw <= area) {
-      drawText(c, x0 + (area - tw + 1) / 2, y, ct.text, ct.color, {x0, x1}, ct.rainbow, hue);
+    int x;
+    int offset = m ? m->textOffset : 0;
+    bool noScroll = m && m->noScroll;
+    if (tw <= area || noScroll) {
+      bool center = !m || m->center;
+      x = center && tw <= area ? x0 + (area - tw + 1) / 2 : x0 + offset;
     } else {
       info.scrolling = true;
       const uint32_t pause = 1000;
-      int32_t phase = elapsed > pause ? (int32_t)((uint64_t)(elapsed - pause) * cfg.scrollSpeed / 1000) : 0;
-      int x;
+      uint32_t speed = (uint32_t)cfg.scrollSpeed * (m ? m->scrollPct : 100) / 100;
+      int32_t phase = elapsed > pause ? (int32_t)((uint64_t)(elapsed - pause) * max<uint32_t>(1, speed) / 1000) : 0;
       if (phase < tw) {
-        x = x0 - phase;
+        x = x0 + offset - phase;
       } else {
         int32_t q = (phase - tw) % (tw + area);
         info.passes = 1 + (phase - tw) / (tw + area);
         x = x0 + area - q;
       }
-      drawText(c, x, y, ct.text, ct.color, {x0, x1}, ct.rainbow, hue);
+    }
+    // text visibility effects
+    bool visible = true;
+    uint8_t fade = 255;
+    if (m && m->blinkText) visible = (now / m->blinkText) % 2 == 0;
+    if (m && m->fadeText) {
+      uint32_t ph = now % (2 * m->fadeText);
+      fade = ph < m->fadeText ? 255 * ph / m->fadeText : 255 * (2 * m->fadeText - ph) / m->fadeText;
+    }
+    if (visible) {
+      Clip clip = {x0, x1};
+      bool fragColors = false;
+      if (m) for (auto& f : m->text) if (f.c >= 0) fragColors = true;
+      if (m && fragColors) {
+        // colored text fragments
+        int fx = x;
+        for (auto& f : m->text) {
+          String t = (m->textCase == 1 || (m->textCase == 0 && cfg.uppercase)) ? toUpperUtf8(f.t) : f.t;
+          if (t.isEmpty()) continue;
+          RGB fc = (f.c >= 0 ? RGB((uint32_t)f.c) : ct.color).scale(fade == 255 ? 255 : fade);
+          int w = drawText(c, fx, y, t, fc, clip);
+          fx += w + 1;
+        }
+      } else if (m && m->grad1 >= 0 && m->grad2 >= 0) {
+        int nch = max(1, charCount(ct.text) - 1);
+        RGB a((uint32_t)m->grad1), b((uint32_t)m->grad2);
+        drawTextFn(c, x, y, ct.text, [&](int n) { return blend(a, b, 255 * n / nch).scale(fade); }, clip);
+      } else if (ct.rainbow) {
+        drawText(c, x, y, ct.text, ct.color, clip, true, hue);
+      } else {
+        drawText(c, x, y, ct.text, fade == 255 ? ct.color : ct.color.scale(fade), clip);
+      }
     }
   }
 
   if (ct.progress >= 0) {
     int y = c.h - 1;
     int filled = (area * min(ct.progress, 100) + 50) / 100;
-    for (int x = 0; x < area; x++) c.set(x0 + x, y, x < filled ? ct.progressColor : ct.progressColor.scale(40));
+    RGB bg = (m && m->progressBg >= 0) ? RGB((uint32_t)m->progressBg) : ct.progressColor.scale(40);
+    for (int x = 0; x < area; x++) c.set(x0 + x, y, x < filled ? ct.progressColor : bg);
   } else if (ct.weekday && c.h >= 8) {
     drawWeekday(c, x0, x1);
   }
+  if (m && !m->draw.empty()) drawCommands(c, *m);
+  if (m && m->stale) drawRect(c, 0, 0, c.w, c.h, RGB(255, 0, 0));
   return info;
 }
 
@@ -468,13 +597,18 @@ static bool slotDone(Slot& s, const RenderInfo& info, uint32_t now) {
   int minPasses = 1;
   switch (s.kind) {
     case SK_PAGE: durMs = cfg.pages[s.idx].duration * 1000UL; break;
-    case SK_CUSTOM: durMs = custom[s.idx].duration * 1000UL; break;
+    case SK_CUSTOM: {
+      const AppMsg& m = custom[s.idx];
+      if (m.repeat > 0 && info.scrolling) return info.passes >= m.repeat;
+      durMs = m.durationMs ? m.durationMs : cfg.appTime * 1000UL;
+      break;
+    }
     case SK_NOTIF:
       if (notifDismissed) return true;
       if (curNotif.hold) return false;
-      durMs = curNotif.durationMs;
-      minPasses = max<int>(1, curNotif.repeat);
-      if (info.scrolling) durMs = 0;  // scrolling notifications end after `repeat` passes
+      if (curNotif.repeat > 0 && info.scrolling) return info.passes >= curNotif.repeat;
+      durMs = curNotif.durationMs ? curNotif.durationMs : 5000;
+      if (info.scrolling) durMs = 0;  // scrolling notification: show the whole text once
       break;
     default: durMs = 10000; break;
   }
@@ -493,7 +627,7 @@ static void popNotif() {
   curNotif = queue[0];
   for (int i = 1; i < qLen; i++) queue[i - 1] = queue[i];
   qLen--;
-  queue[qLen] = Notif();
+  queue[qLen] = AppMsg();
 }
 
 static void advance(uint32_t now) {
@@ -598,6 +732,8 @@ void frame() {
     Lock l;
     if (otaPct >= 0) {
       drawOta(cvOut);
+    } else if (mood.on && qLen == 0 && cur.kind != SK_NOTIF) {
+      cvOut.fillRect(0, 0, cvOut.w, cvOut.h, mood.color);
     } else if ((int32_t)(testUntil - now) > 0) {
       drawTest(cvOut, now);
     } else {
@@ -610,7 +746,7 @@ void frame() {
     }
     memcpy(preview, cvOut.buf, min(previewLen, (size_t)cvOut.w * cvOut.h * 3));
     frameCounter++;
-    bright = targetBrightness();
+    bright = (mood.on && cfg.power && qLen == 0 && cur.kind != SK_NOTIF) ? mood.bri : targetBrightness();
   }
   Display::show(cvOut, bright);
 }
@@ -678,42 +814,115 @@ void buttonAction() {
   systemMessage(ok ? "OK" : "HA?", ok ? "check" : "error", 1200, false);
 }
 
-static void parseNotif(JsonVariantConst v, Notif& n, bool& stack) {
-  stack = true;
-  if (v.is<const char*>()) {
-    n.text = v.as<const char*>();
-    return;
-  }
-  const char* txt = v["text"] | (const char*)nullptr;
-  if (!txt) txt = v["message"] | "";
-  n.text = txt;
-  n.icon = v["icon"] | "";
-  n.effect = v["effect"] | "";
-  n.color = variantColor(v["color"], -1);
-  n.progressColor = variantColor(v["progress_color"], -1);
-  n.durationMs = (uint32_t)((v["duration"] | 5.0f) * 1000);
-  n.repeat = v["repeat"] | 1;
-  n.rainbow = v["rainbow"] | false;
-  n.hold = v["hold"] | false;
-  n.wakeup = v["wakeup"] | false;
-  n.progress = v["progress"] | -1;
-  stack = v["stack"] | true;
-  // HA notify service sends {"message": "...", "title": "...", "data": {...}}
-  JsonVariantConst d = v["data"];
-  if (d.is<JsonObjectConst>()) {
-    if (n.icon.isEmpty()) n.icon = d["icon"] | "";
-    if (n.color < 0) n.color = variantColor(d["color"], -1);
-    if (d["duration"].is<float>()) n.durationMs = (uint32_t)(d["duration"].as<float>() * 1000);
-    n.rainbow = d["rainbow"] | n.rainbow;
-    n.hold = d["hold"] | n.hold;
-    n.wakeup = d["wakeup"] | n.wakeup;
-    n.repeat = d["repeat"] | n.repeat;
-  }
-  const char* title = v["title"] | (const char*)nullptr;
-  if (title && *title) n.text = String(title) + ": " + n.text;
+// ---------------------------------------------------------------- message parsing (AWTRIX 3 format + own keys)
+static int32_t colorKey(JsonVariantConst v, const char* a, const char* b = nullptr) {
+  int32_t c = variantColor(v[a], -1);
+  if (c < 0 && b) c = variantColor(v[b], -1);
+  return c;
 }
 
-static void enqueue(const Notif& n, bool stack) {
+static void parseMsg(JsonVariantConst v, AppMsg& m, bool isNotif, bool& stack) {
+  stack = true;
+  m.used = true;
+  if (v.is<const char*>()) {
+    m.text.push_back({v.as<const char*>(), -1});
+    return;
+  }
+  // text: string or array of fragments [{"t":"..","c":"FF0000"}]
+  JsonVariantConst t = v["text"];
+  if (t.isNull()) t = v["message"];  // HA notify payload
+  if (t.is<JsonArrayConst>()) {
+    for (JsonVariantConst f : t.as<JsonArrayConst>()) {
+      Frag fr;
+      fr.t = f["t"] | "";
+      fr.c = variantColor(f["c"], -1);
+      m.text.push_back(fr);
+    }
+  } else if (!t.isNull()) {
+    m.text.push_back({t.as<String>(), -1});
+  }
+  const char* title = v["title"] | (const char*)nullptr;
+  if (title && *title && !m.text.empty()) m.text[0].t = String(title) + ": " + m.text[0].t;
+
+  if (v["icon"].is<int>()) m.icon = String(v["icon"].as<int>());
+  else m.icon = v["icon"] | "";
+  m.effect = v["effect"] | "";
+  m.color = colorKey(v, "color");
+  m.background = colorKey(v, "background");
+  m.progressColor = colorKey(v, "progressC", "progress_color");
+  m.progressBg = colorKey(v, "progressBC");
+  m.barBg = colorKey(v, "barBC");
+  JsonArrayConst g = v["gradient"];
+  if (g.size() >= 2) {
+    m.grad1 = variantColor(g[0], -1);
+    m.grad2 = variantColor(g[1], -1);
+  }
+  m.rainbow = v["rainbow"] | false;
+  m.hold = v["hold"] | false;
+  m.wakeup = v["wakeup"] | false;
+  m.noScroll = v["noScroll"] | false;
+  m.center = v["center"] | true;
+  m.topText = v["topText"] | false;
+  m.autoscale = v["autoscale"] | true;
+  m.textCase = v["textCase"] | 0;
+  m.textOffset = v["textOffset"] | 0;
+  m.blinkText = v["blinkText"] | 0;
+  m.fadeText = v["fadeText"] | 0;
+  m.scrollPct = constrain((int)(v["scrollSpeed"] | 100), 10, 500);
+  m.repeat = v["repeat"] | -1;
+  float dur = v["duration"] | 0.0f;
+  m.durationMs = dur > 0 ? (uint32_t)(dur * 1000) : 0;
+  m.progress = v["progress"] | -1;
+  if (m.progress > 100) m.progress = 100;
+  for (JsonVariantConst x : v["bar"].as<JsonArrayConst>()) m.bar.push_back(x.as<int>());
+  for (JsonVariantConst x : v["line"].as<JsonArrayConst>()) m.line.push_back(x.as<int>());
+  // drawing instructions
+  for (JsonObjectConst o : v["draw"].as<JsonArrayConst>()) {
+    for (JsonPairConst kv : o) {
+      static const char* const OPS[] = {"", "dp", "dl", "dr", "df", "dc", "dfc", "dt", "db"};
+      DrawCmd d;
+      for (uint8_t k = 1; k <= 8; k++) if (!strcmp(kv.key().c_str(), OPS[k])) d.op = k;
+      JsonArrayConst a = kv.value().as<JsonArrayConst>();
+      if (!d.op || a.isNull()) continue;
+      int nNum = d.op == 1 ? 2 : (d.op == 5 || d.op == 6) ? 3 : d.op == 7 ? 2 : 4;
+      for (int k = 0; k < nNum && k < 4; k++) d.v[k] = a[k] | 0;
+      if (d.op == 7) {
+        d.text = a[2] | "";
+        d.col = variantColor(a[3], 0xFFFFFF);
+      } else if (d.op == 8) {
+        for (JsonVariantConst px : a[4].as<JsonArrayConst>()) d.bmp.push_back(px.as<uint32_t>());
+      } else {
+        d.col = variantColor(a[nNum], 0xFFFFFF);
+      }
+      if (m.draw.size() < 64) m.draw.push_back(d);
+    }
+  }
+  if (!isNotif) {
+    uint32_t life = v["lifetime"] | 0;
+    m.lifetimeMs = life * 1000;
+    m.lifetimeMode = v["lifetimeMode"] | 0;
+    if (life) m.expires = millis() + m.lifetimeMs;
+  }
+  stack = v["stack"] | true;
+  // HA notify service: {"message": "...", "data": {...}}
+  JsonVariantConst d = v["data"];
+  if (d.is<JsonObjectConst>()) {
+    if (m.icon.isEmpty()) m.icon = d["icon"] | "";
+    if (m.color < 0) m.color = variantColor(d["color"], -1);
+    if (d["duration"].is<float>()) m.durationMs = (uint32_t)(d["duration"].as<float>() * 1000);
+    m.rainbow = d["rainbow"] | m.rainbow;
+    m.hold = d["hold"] | m.hold;
+    m.wakeup = d["wakeup"] | m.wakeup;
+    m.repeat = d["repeat"] | m.repeat;
+  }
+}
+
+static bool msgEmpty(const AppMsg& m) {
+  return m.plainText().isEmpty() && m.icon.isEmpty() && m.effect.isEmpty() && m.bar.empty() && m.line.empty() &&
+         m.draw.empty() && m.progress < 0 && m.background < 0;
+}
+
+static void enqueue(const AppMsg& n, bool stack) {
   Lock l;
   if (!stack) {
     qLen = 0;
@@ -727,19 +936,21 @@ static void enqueue(const Notif& n, bool stack) {
 }
 
 void notify(JsonVariantConst v) {
-  Notif n;
+  AppMsg n;
   bool stack;
-  parseNotif(v, n, stack);
-  if (n.text.isEmpty() && n.icon.isEmpty() && n.effect.isEmpty()) return;
+  parseMsg(v, n, true, stack);
+  if (msgEmpty(n)) return;
   enqueue(n, stack);
 }
 
 void systemMessage(const String& text, const String& icon, uint32_t durationMs, bool wakeup) {
-  Notif n;
-  n.text = text;
+  AppMsg n;
+  n.used = true;
+  n.text.push_back({text, -1});
   n.icon = icon;
   n.durationMs = durationMs;
   n.wakeup = wakeup;
+  n.repeat = 1;
   enqueue(n, true);
 }
 
@@ -755,40 +966,39 @@ int queueLength() {
   return qLen + (cur.kind == SK_NOTIF ? 1 : 0);
 }
 
-void setCustom(const String& name, JsonVariantConst v) {
-  Lock l;
+static void setOneCustom(const String& name, JsonVariantConst v) {
   int slot = -1;
   for (int i = 0; i < MAX_CUSTOM; i++) if (custom[i].used && custom[i].name == name) slot = i;
-  bool empty = v.isNull() || (v.is<const char*>() && strlen(v.as<const char*>()) == 0) ||
-               (v.is<JsonObjectConst>() && v.as<JsonObjectConst>().size() == 0);
-  if (empty) {
-    if (slot >= 0) custom[slot] = CustomPage();
-    return;
-  }
   if (slot < 0) {
     for (int i = 0; i < MAX_CUSTOM; i++) if (!custom[i].used) { slot = i; break; }
-    if (slot < 0) {  // replace the one expiring soonest
+    if (slot < 0) {  // full: replace the oldest one
       slot = 0;
     }
   }
-  CustomPage& c = custom[slot];
-  c = CustomPage();
-  c.used = true;
+  AppMsg& c = custom[slot];
+  c = AppMsg();
+  bool stack;
+  parseMsg(v, c, false, stack);
   c.name = name;
-  if (v.is<const char*>()) {
-    c.text = v.as<const char*>();
-  } else {
-    c.text = v["text"] | "";
-    c.icon = v["icon"] | "";
-    c.effect = v["effect"] | "";
-    c.color = variantColor(v["color"], -1);
-    c.progressColor = variantColor(v["progress_color"], -1);
-    c.progress = v["progress"] | -1;
-    c.duration = constrain((int)(v["duration"] | 8), 1, 3600);
-    c.rainbow = v["rainbow"] | false;
-    uint32_t life = v["lifetime"] | 0;
-    if (life) c.expires = millis() + life * 1000;
+}
+
+void setCustom(const String& name, JsonVariantConst v) {
+  Lock l;
+  bool empty = v.isNull() || (v.is<const char*>() && strlen(v.as<const char*>()) == 0) ||
+               (v.is<JsonObjectConst>() && v.as<JsonObjectConst>().size() == 0) ||
+               (v.is<JsonArrayConst>() && v.as<JsonArrayConst>().size() == 0);
+  if (empty) {
+    // AWTRIX: deletes the app and all apps starting with the name (name0, name1, ...)
+    for (int i = 0; i < MAX_CUSTOM; i++)
+      if (custom[i].used && custom[i].name.startsWith(name)) custom[i] = AppMsg();
+    return;
   }
+  if (v.is<JsonArrayConst>()) {
+    int k = 0;
+    for (JsonVariantConst item : v.as<JsonArrayConst>()) setOneCustom(name + String(k++), item);
+    return;
+  }
+  setOneCustom(name, v);
 }
 
 void customList(JsonArray a) {
@@ -797,9 +1007,66 @@ void customList(JsonArray a) {
     if (!custom[i].used) continue;
     JsonObject o = a.add<JsonObject>();
     o["name"] = custom[i].name;
-    o["text"] = custom[i].text;
+    o["text"] = custom[i].plainText();
     o["icon"] = custom[i].icon;
   }
+}
+
+// ---------------------------------------------------------------- moodlight
+static RGB kelvinToRgb(int k) {
+  float t = constrain(k, 1000, 40000) / 100.0f;
+  float r, g, b;
+  if (t <= 66) {
+    r = 255;
+    g = 99.47f * logf(t) - 161.12f;
+    b = t <= 19 ? 0 : 138.52f * logf(t - 10) - 305.04f;
+  } else {
+    r = 329.7f * powf(t - 60, -0.1332f);
+    g = 288.12f * powf(t - 60, -0.0755f);
+    b = 255;
+  }
+  return RGB(constrain((int)r, 0, 255), constrain((int)g, 0, 255), constrain((int)b, 0, 255));
+}
+
+void setMoodlight(JsonVariantConst v) {
+  Lock l;
+  if (v.isNull() || !v.is<JsonObjectConst>() || v.as<JsonObjectConst>().size() == 0) {
+    mood.on = false;
+    return;
+  }
+  mood.on = true;
+  mood.bri = v["brightness"] | 100;
+  if (v["kelvin"].is<int>()) mood.color = kelvinToRgb(v["kelvin"].as<int>());
+  else mood.color = RGB((uint32_t)variantColor(v["color"], 0xFFB464));
+}
+
+bool moodlightOn() { return mood.on; }
+
+// ---------------------------------------------------------------- AWTRIX helpers
+bool switchApp(const String& name) {
+  // AWTRIX built-in app names map onto the first page of that type
+  int type = -1;
+  if (name.equalsIgnoreCase("Time")) type = PT_CLOCK;
+  else if (name.equalsIgnoreCase("Date")) type = PT_DATE;
+  if (type >= 0) {
+    Lock l;
+    for (int i = 0; i < cfg.pageCount; i++)
+      if (cfg.pages[i].type == type && pageShown(i)) { switchTo(slotFromPos(i)); return true; }
+  }
+  return gotoPage(name);
+}
+
+void loopJson(JsonObject o) {
+  Lock l;
+  int n = 0;
+  for (int i = 0; i < cfg.pageCount; i++) if (pageShown(i)) o[cfg.pages[i].name] = n++;
+  for (int i = 0; i < MAX_CUSTOM; i++) if (customShown(i)) o[custom[i].name] = n++;
+}
+
+bool indicatorOn(int idx) {
+  if (idx < 0 || idx >= NUM_INDICATORS) return false;
+  Lock l;
+  return ind[idx].mqttColor > 0 || ind[idx].tplColor > 0;
 }
 
 void setIndicator(int idx, JsonVariantConst v) {
@@ -819,7 +1086,9 @@ void setIndicator(int idx, JsonVariantConst v) {
     return;
   }
   d.mqttColor = variantColor(v["color"], -1);
+  if (d.mqttColor == 0) d.mqttColor = -1;  // black / "0" hides the indicator
   d.blink = v["blink"] | 0;
+  if (!d.blink) d.blink = v["fade"] | 0;
   uint32_t life = v["lifetime"] | 0;
   d.expires = life ? millis() + life * 1000 : 0;
 }

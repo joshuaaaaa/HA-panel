@@ -6,6 +6,7 @@
 #include "config.h"
 #include "display.h"
 #include "effects.h"
+#include "awtrix.h"
 
 namespace Mqtt {
 
@@ -223,6 +224,9 @@ void publishButton(int idx, bool pressed) {
   char id[32];
   snprintf(id, sizeof(id), "button%d/state", idx + 1);
   pub(t(id), pressed ? "ON" : "OFF", false);
+  // AWTRIX style button topics
+  static const char* const AW[] = {"stats/buttonLeft", "stats/buttonSelect", "stats/buttonRight"};
+  if (idx >= 0 && idx < 3) pub(t(AW[idx]), pressed ? "1" : "0", false);
 }
 
 // ---------------------------------------------------------------- commands
@@ -290,10 +294,6 @@ static void onMessage(char* topicC, uint8_t* payload, unsigned int len) {
     Lock l;
     cfg.nightEnabled = onOff(p, cfg.nightEnabled);
     changed = true;
-  } else if (sub == "power") {
-    Lock l;
-    cfg.power = onOff(p, cfg.power);
-    changed = true;
   } else if (sub == "cmd") {
     if (p == "next") Apps::next();
     else if (p == "prev") Apps::prev();
@@ -301,30 +301,25 @@ static void onMessage(char* topicC, uint8_t* payload, unsigned int len) {
     else if (p == "restart") reqReboot = true;
     else if (p == "select") Apps::buttonAction();
     reqMqttState = true;
-  } else if (sub == "notify") {
+  } else if (sub == "sendscreen") {
     JsonDocument d;
-    if (p.startsWith("{") && !deserializeJson(d, p)) Apps::notify(d.as<JsonVariantConst>());
-    else {
-      d.set(p);
-      Apps::notify(d.as<JsonVariantConst>());
+    Awtrix::screen(d.to<JsonArray>());
+    pubJson(t("screen"), d, false);
+  } else {
+    // AWTRIX 3 compatible topics: notify, notify/dismiss, custom/<app>, indicator1-3, power, sleep,
+    // moodlight, switch, nextapp, previousapp, settings, reboot
+    JsonDocument d;
+    String q = p;
+    q.trim();
+    if (q.startsWith("{") || q.startsWith("[")) {
+      if (deserializeJson(d, q)) {
+        Serial.printf("[mqtt] invalid JSON on %s\n", topic.c_str());
+        return;
+      }
+    } else if (q.length()) {
+      d.set(q);
     }
-  } else if (sub == "dismiss") {
-    Apps::dismiss();
-  } else if (sub.startsWith("custom/")) {
-    String name = sub.substring(7);
-    JsonDocument d;
-    if (p.length() && p.startsWith("{")) {
-      if (deserializeJson(d, p)) return;
-    } else if (p.length()) {
-      d.set(p);
-    }
-    Apps::setCustom(name, d.as<JsonVariantConst>());
-  } else if (sub.startsWith("indicator")) {
-    int idx = sub.substring(9).toInt() - 1;
-    JsonDocument d;
-    if (p.startsWith("{")) deserializeJson(d, p);
-    else if (p.length()) d.set(p);
-    Apps::setIndicator(idx, d.as<JsonVariantConst>());
+    Awtrix::command(sub, d.as<JsonVariantConst>());
   }
   if (changed) {
     reqSaveConfig = true;
@@ -359,7 +354,10 @@ static bool connect() {
   pub(will, "online");
   String b = base();
   const char* subs[] = {"light/set", "brightness/set", "page/set", "autorotate/set", "autobright/set", "night/set",
-                        "power", "cmd", "notify", "dismiss", "custom/+", "indicator1", "indicator2", "indicator3"};
+                        "power", "cmd", "notify", "dismiss", "custom/+", "indicator1", "indicator2", "indicator3",
+                        // AWTRIX 3 compatible topics
+                        "notify/dismiss", "sleep", "moodlight", "switch", "nextapp", "previousapp", "settings",
+                        "reboot", "sendscreen", "sound", "rtttl"};
   for (auto s : subs) mq.subscribe((b + "/" + s).c_str());
   mq.subscribe((cfg.discoveryPrefix + "/status").c_str());
   publishDiscovery();
@@ -405,9 +403,12 @@ void loop() {
     reqMqttState = false;
     publishState();
   }
-  if (millis() - lastSensors > 60000) {
+  if (millis() - lastSensors > 15000) {
     lastSensors = millis();
     publishSensors();
+    JsonDocument st;
+    Awtrix::stats(st.to<JsonObject>());
+    pubJson(t("stats"), st, false);
   }
   // page changes
   static uint32_t lastPageCheck = 0;
@@ -416,6 +417,7 @@ void loop() {
     if (Apps::currentName() != lastPage) {
       lastPage = Apps::currentName();
       pub(t("page/state"), lastPage);
+      pub(t("stats/currentApp"), lastPage);
     }
   }
 }

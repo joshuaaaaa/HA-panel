@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        env: [esp32-s3, esp32dev, esp32-c3, ulanzi-tc001]
+        env: [esp32, ulanzi-tc001, esp32-s3, esp32-c3]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/cache@v4

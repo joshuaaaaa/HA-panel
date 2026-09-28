@@ -1,9 +1,31 @@
 # HA-Panel – LED matice 8×32 pro Home Assistant
 
 Vlastní firmware pro ESP32, který z levného flexibilního panelu **8×32 WS2812B** udělá
-chytrý displej pro Home Assistant. Něco jako WLED nebo AWTRIX, ale zaměřený na zobrazování
-dat z HA: vlastní webové rozhraní, stránky s entitami a ikonami, šablony Jinja
-vyhodnocované živě, notifikace z automatizací, MQTT auto-discovery a editor ikon.
+chytrý displej pro Home Assistant. Používá **stejné zapojení jako AWTRIX 3** (matice na GPIO32)
+a má **AWTRIX 3 kompatibilní MQTT/HTTP API** – stávající AWTRIX automatizace a blueprinty fungují
+beze změny. Navíc umí číst data přímo z HA (šablony Jinja vyhodnocované živě), má vlastní webové
+rozhraní v češtině, stránky s entitami a ikonami, editor ikon a MQTT auto-discovery.
+
+## Přechod z AWTRIX 3
+
+- **Zapojení se nemění**: matice GPIO32, tlačítka GPIO26 / 27 / 14, fotorezistor GPIO35.
+  Nahraj `firmware/hapanel-esp32-factory.bin` (ESP32) nebo `hapanel-ulanzi-tc001-factory.bin` (Ulanzi).
+- **Rozložení matice** jako AWTRIX `"matrix": 0/1/2` – *Nastavení → Matice → Předvolba*.
+  Výchozí je 0 (řádky, had), stejně jako v AWTRIX.
+- **MQTT prefix** je `awtrix_xxxxxx` (poslední 3 bajty MAC, stejně jako AWTRIX), takže
+  automatizace posílající do `awtrix_xxxxxx/notify`, `/custom/<app>`, `/indicator1` … fungují dál.
+- **HTTP**: `/api/notify`, `/api/custom?name=`, `/api/indicator1-3`, `/api/power`, `/api/moodlight`,
+  `/api/switch`, `/api/nextapp`, `/api/previousapp`, `/api/settings`, `/api/stats`, `/api/loop`,
+  `/api/screen`, `/api/notify/dismiss`, `/api/reboot`.
+- **Podporované klíče zpráv**: `text` (i barevné fragmenty), `icon`, `color`, `background`, `gradient`,
+  `rainbow`, `blinkText`, `fadeText`, `textCase`, `topText`, `textOffset`, `center`, `noScroll`,
+  `scrollSpeed`, `repeat`, `duration`, `hold`, `wakeup`, `stack`, `progress`, `progressC`, `progressBC`,
+  `bar`, `line`, `autoscale`, `barBC`, `draw` (dp, dl, dr, df, dc, dfc, dt, db), `effect`, `lifetime`,
+  `lifetimeMode`, pole aplikací.
+- **Ikony podle LaMetric ID** (např. `"icon": "2400"`): na záložce *Ikony* zadej ID a klikni
+  *Stáhnout z LaMetric* – ikona (i animovaná) se uloží pod stejným číslem.
+- Není podporováno: zvuky (buzzer, DFPlayer), baterie, teplotní čidla, MQTT placeholdery `{{topic}}`
+  (místo nich použij šablony HA na stránkách).
 
 ```
  ┌────────────────────────────────┐
@@ -64,9 +86,9 @@ Vestavěné ikony:
 
 | Deska | Doporučení |
 |---|---|
-| **ESP32-S3 DevKitC-1** (N8R2, N16R8, N8…) | ⭐ **Doporučeno.** Dvě jádra 240 MHz (displej běží na vlastním jádře, síť nezasekává animace), 8–16 MB flash (místo pro OTA i ikony), nativní USB, spolehlivé RMT pro WS2812. |
-| ESP32 DevKit (ESP32-WROOM-32, 4 MB) | ✅ Funguje výborně, jen menší rezerva paměti. Nejlevnější volba. |
-| Ulanzi TC001 (hodiny AWTRIX) | ✅ Samostatné prostředí `ulanzi-tc001` – nahradí AWTRIX, využije čidlo světla i tlačítka. |
+| **ESP32 DevKit (ESP32-WROOM-32)** se zapojením AWTRIX | ⭐ **Výchozí.** Stejná deska a zapojení jako AWTRIX 3 DIY (matice GPIO32). Dvě jádra – displej běží na vlastním jádře. |
+| Ulanzi TC001 (hodiny AWTRIX) | ✅ Prostředí `ulanzi-tc001` – nahradí AWTRIX, využije čidlo světla i tlačítka. |
+| ESP32-S3 | ✅ Funguje (data GPIO14). Pozor na desky se dvěma USB – viz *Řešení problémů*. |
 | ESP32-C3 (SuperMini) | ⚠️ Funguje, ale má jen jedno jádro – při síťové aktivitě může animace drobně zaškobrtnout. |
 | ESP8266 / ESP32-S2 | ❌ Nepodporováno (málo RAM / jedno jádro). |
 
@@ -79,8 +101,13 @@ Vestavěné ikony:
                                      │
                     pin 5V / VIN ────┼──────────────── +5V  (červený) panelu
                     pin GND ─────────┼──────────────── GND  (bílý/černý) panelu
-                    GPIO14 ── 330 Ω ─┴──────────────── DIN  (zelený) panelu
-                    (S3: GPIO14, ESP32: GPIO16, C3: GPIO5 – lze změnit ve webu)
+                    GPIO32 ── 330 Ω ─┴──────────────── DIN  (zelený) panelu
+                    (ESP32 / Ulanzi: GPIO32 jako AWTRIX, S3: GPIO14, C3: GPIO5 – lze změnit ve webu)
+
+  Volitelně (jako AWTRIX 3 DIY):
+  Tlačítka: GPIO26 (vlevo), GPIO27 (střed), GPIO14 (vpravo) ── tlačítko ── GND
+  Fotorezistor GL5516: 3V3 ── LDR ──┬── GPIO35
+                                    └── 10 kΩ ── GND
 ```
 
 - Firmware má z výroby **limit proudu 850 mA** (stejně jako WLED), takže USB konektor, kabel
@@ -101,13 +128,8 @@ Vestavěné ikony:
                     │
                     ├── 5V / VIN desky ESP32   (nebo napájet ESP32 z USB, GND ale VŽDY spojit!)
                     │
-  ESP32 GPIO14 ── 330 Ω ─────────────────────── DIN  (zelený) panelu
-  (S3: GPIO14, ESP32: GPIO16, C3: GPIO5 – lze změnit ve webu)
-
-  Volitelně:
-  3V3 ── fotorezistor ──┬── ADC pin (S3: GPIO1–10, ESP32: GPIO32–39)
-                        └── 10 kΩ ── GND
-  Tlačítka: GPIO ── tlačítko ── GND   (vlevo / střed / vpravo)
+  ESP32 GPIO32 ── 330 Ω ─────────────────────── DIN  (zelený) panelu
+  (ESP32 / Ulanzi: GPIO32, S3: GPIO14, C3: GPIO5 – lze změnit ve webu)
 ```
 
 Poznámky:
@@ -125,10 +147,10 @@ Ve složce [`firmware/`](firmware/) jsou připravené obrazy:
 
 | Soubor | Deska |
 |---|---|
-| `hapanel-esp32-s3-factory.bin` | jakákoli ESP32-S3 deska (4 MB+ flash) |
-| `hapanel-esp32dev-factory.bin` | ESP32 DevKit / WROOM-32 |
-| `hapanel-esp32-c3-factory.bin` | ESP32-C3 |
+| `hapanel-esp32-factory.bin` | **ESP32 DevKit / WROOM-32 se zapojením AWTRIX (GPIO32)** |
 | `hapanel-ulanzi-tc001-factory.bin` | Ulanzi TC001 |
+| `hapanel-esp32-s3-factory.bin` | jakákoli ESP32-S3 deska (data GPIO14) |
+| `hapanel-esp32-c3-factory.bin` | ESP32-C3 (data GPIO5) |
 
 1. Otevři v Chrome/Edge <https://espressif.github.io/esptool-js/> (nebo <https://web.esphome.io> → *Install* → vlastní soubor)
 2. Připoj desku USB kabelem, *Connect*, vyber port
@@ -140,12 +162,12 @@ Soubory `*-ota.bin` slouží pro pozdější aktualizaci přes webové rozhraní
 ### B) PlatformIO (vývoj)
 ```bash
 pip install platformio
-pio run -e esp32-s3 -t upload        # nebo esp32dev / esp32-c3 / ulanzi-tc001
+pio run -e esp32 -t upload           # nebo ulanzi-tc001 / esp32-s3 / esp32-c3
 pio device monitor
 ```
 Webové rozhraní (`web/index.html`) se při sestavení automaticky zkomprimuje do firmwaru
 (`tools/embed_web.py`). Další aktualizace lze posílat po síti:
-`pio run -e esp32-s3 -t upload --upload-port hapanel-xxxxxx.local`.
+`pio run -e esp32 -t upload --upload-port hapanel-xxxxxx.local`.
 
 ## První spuštění
 
@@ -155,8 +177,8 @@ Webové rozhraní (`web/index.html`) se při sestavení automaticky zkomprimuje 
 3. *Nastavení → Wi-Fi*: vyber síť, zadej heslo, ulož a restartuj. Panel ukáže svou novou IP adresu;
    web je pak dostupný i na `http://hapanel-xxxxxx.local`.
 4. *Nastavení → Matice*: stiskni **Testovací obrazec** – červená LED musí být vlevo nahoře,
-   zelená vpravo nahoře. Pokud ne, uprav volby *po sloupcích / had / první LED vpravo / dole*
-   (pro běžný flexibilní panel 8×32 zvol předvolbu *Flexibilní panel*).
+   zelená vpravo nahoře. Pokud ne, zkus předvolby *AWTRIX rozložení 0 / 1 / 2* (flexibilní panel
+   8×32 bývá rozložení 2 – sloupce), případně volby *první LED vpravo / dole*.
 
 ## Propojení s Home Assistantem
 
@@ -197,7 +219,7 @@ Plná notifikace přes MQTT (ikona, barva, opakování, probuzení vypnutého di
 ```yaml
 action: mqtt.publish
 data:
-  topic: hapanel/xxxxxx/notify
+  topic: awtrix_xxxxxx/notify
   payload: >
     {"text": "Pračka dokončila", "icon": "washer", "color": "#00ff00",
      "repeat": 2, "wakeup": true}
@@ -207,7 +229,7 @@ Dynamická stránka z automatizace (zmizí po 10 minutách):
 ```yaml
 action: mqtt.publish
 data:
-  topic: hapanel/xxxxxx/custom/myčka
+  topic: awtrix_xxxxxx/custom/myčka
   payload: '{"text": "Myčka {{ states(''sensor.mycka_zbyva'') }} min", "icon": "water", "progress": 60, "lifetime": 600}'
 ```
 
@@ -215,7 +237,7 @@ Indikátor (blikající červená vpravo nahoře):
 ```yaml
 action: mqtt.publish
 data:
-  topic: hapanel/xxxxxx/indicator1
+  topic: awtrix_xxxxxx/indicator1
   payload: '{"color": "#ff0000", "blink": 500}'
 ```
 
@@ -269,6 +291,7 @@ src/icons*.{h,cpp}     vestavěné + vlastní ikony (LittleFS)
 src/effects.*          animované efekty
 src/ha_client.*        Home Assistant WebSocket (render_template) + REST
 src/mqtt.*             MQTT + auto-discovery
+src/awtrix.*           AWTRIX 3 kompatibilní API (stats, settings, power, moodlight…)
 src/web.*              webový server, REST API, živý náhled (WebSocket)
 src/hw.*               Wi-Fi/AP/mDNS/NTP, tlačítka, čidlo světla
 src/config.*           konfigurace (JSON v LittleFS)

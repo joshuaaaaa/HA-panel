@@ -1,5 +1,6 @@
 #pragma once
 #include <Arduino.h>
+#include <functional>
 
 struct RGB {
   uint8_t r = 0, g = 0, b = 0;
@@ -37,6 +38,14 @@ struct Clip { int x0, x1; };
 int textWidth(const String& s);
 // draws text; returns width. color used unless rainbow (hue shifts along text)
 int drawText(Canvas& c, int x, int y, const String& s, RGB color, Clip clip, bool rainbow = false, uint8_t hue0 = 0);
+// draws text with a per-character color (n = character index); returns width
+int drawTextFn(Canvas& c, int x, int y, const String& s, const std::function<RGB(int)>& colorAt, Clip clip);
+int charCount(const String& s);
+
+// ---- primitives (used by the AWTRIX compatible "draw" instructions)
+void drawLine(Canvas& c, int x0, int y0, int x1, int y1, RGB col);
+void drawRect(Canvas& c, int x, int y, int w, int h, RGB col);
+void drawCircle(Canvas& c, int cx, int cy, int r, RGB col, bool fill);
 // big 4x7 digits font (digits, ':', ' ', '-')
 int bigTextWidth(const String& s);
 int drawBigText(Canvas& c, int x, int y, const String& s, RGB color, Clip clip, uint8_t colonMask = 0xFF);

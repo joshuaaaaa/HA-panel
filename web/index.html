@@ -230,6 +230,8 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{border-bottom:1px
         <button class="b s d" id="ie-fdel">Smazat snímek</button>
         <label class="b s" style="cursor:pointer">Import obrázku<input type="file" id="ie-import" accept="image/*" hidden></label>
         <button class="b s" id="ie-export">Export PNG</button>
+        <input id="ie-lmid" placeholder="LaMetric ID" style="width:120px;padding:4px 8px" inputmode="numeric">
+        <button class="b s" id="ie-lm" title="Stáhne ikonu z developer.lametric.com (stejné ID jako v AWTRIX)">Stáhnout z LaMetric</button>
       </div>
       <div class="row" style="margin-top:14px">
         <canvas class="ic" id="ie-anim" width="8" height="8" style="width:48px;height:48px;flex:0 0 48px"></canvas>
@@ -310,6 +312,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{border-bottom:1px
       <label class="f"><span>Svislá pozice textu (řádek 0–3)</span><input type="number" name="display.text_y" min="0" max="3"></label>
       <label class="sw"><input type="checkbox" name="display.auto_rotate"><i></i>Automaticky přepínat stránky</label>
       <label class="sw"><input type="checkbox" name="display.uppercase"><i></i>Text velkými písmeny</label>
+      <label class="f"><span>Výchozí doba zobrazení custom aplikací (s, AWTRIX ATIME)</span><input type="number" name="display.app_time" min="1" max="3600"></label>
       <label class="f"><span>Výchozí barva textu</span><input type="color" name="display.text_color"></label>
       <button class="b p">Uložit</button>
     </form>
@@ -317,7 +320,8 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{border-bottom:1px
     <form class="card" data-form>
       <h2>Matice LED (hardware)</h2>
       <label class="f"><span>Předvolba</span>
-        <select id="hwpreset"><option value="">— vyber —</option><option value="flex">Flexibilní panel 8×32 (WS2812B, sloupce, had)</option><option value="rows">Panel po řádcích (had)</option><option value="ulanzi">Ulanzi TC001 / AWTRIX hodiny</option></select></label>
+        <select id="hwpreset"><option value="">— vyber —</option><option value="aw0">AWTRIX rozložení 0 – řádky, had (výchozí AWTRIX)</option><option value="aw1">AWTRIX rozložení 1 – 4× panel 8×8</option><option value="aw2">AWTRIX rozložení 2 – sloupce, had (flexibilní 8×32)</option><option value="ulanzi">Ulanzi TC001 (vč. čidla a tlačítek)</option></select></label>
+      <p class="hint">Stejné volby jako <code>"matrix": 0/1/2</code> v AWTRIX 3. Pokud se zobrazují nesmysly, zkus jiné rozložení a ověř testovacím obrazcem.</p>
       <div class="row">
         <label class="f"><span>Datový pin (GPIO)</span><input type="number" name="matrix.pin"></label>
         <label class="f"><span>Šířka</span><input type="number" name="matrix.width" min="8" max="128"></label>
@@ -327,6 +331,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{border-bottom:1px
       <label class="sw"><input type="checkbox" name="matrix.serpentine"><i></i>Hadovité zapojení (cik-cak)</label>
       <label class="sw"><input type="checkbox" name="matrix.start_right"><i></i>První LED vpravo</label>
       <label class="sw"><input type="checkbox" name="matrix.start_bottom"><i></i>První LED dole</label>
+      <label class="sw"><input type="checkbox" name="matrix.tiled"><i></i>Složeno z panelů 8×8 (AWTRIX rozložení 1)</label>
       <div class="row">
         <label class="f"><span>Pořadí barev</span><select name="matrix.order"><option>GRB</option><option>RGB</option><option>BRG</option><option>RBG</option><option>GBR</option><option>BGR</option></select></label>
         <label class="f"><span>Limit proudu (mA, 0 = bez)</span><input type="number" name="matrix.max_current" min="0" step="50"></label>
@@ -466,7 +471,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{border-bottom:1px
   </div>
   <div class="card">
     <h2>MQTT</h2>
-    <p class="mut">Základní topic: <code class="bt">hapanel/xxxxxx</code>. Při zapnutém auto-discovery se v HA objeví zařízení s entitami: světlo (zap/vyp, jas, barva, efekty), výběr stránky, přepínače, tlačítka, notify, senzory.</p>
+    <p class="mut">Základní topic: <code class="bt">awtrix_xxxxxx</code>. Při zapnutém auto-discovery se v HA objeví zařízení s entitami: světlo (zap/vyp, jas, barva, efekty), výběr stránky, přepínače, tlačítka, notify, senzory.</p>
     <table>
       <tr><th>Topic</th><th>Payload</th></tr>
       <tr><td><code>…/notify</code></td><td>Text nebo JSON <code>{"text":"Ahoj","icon":"bell","color":"#ff0000","duration":5,"repeat":2,"rainbow":true,"hold":false,"wakeup":true,"progress":40,"stack":true}</code></td></tr>
@@ -479,6 +484,26 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{border-bottom:1px
       <tr><td><code>…/light/set</code></td><td>JSON světla HA (<code>state</code>, <code>brightness</code>, <code>color</code>, <code>effect</code>)</td></tr>
       <tr><td><code>…/sensor</code></td><td>(stav) RSSI, uptime, proud, světlo…</td></tr>
     </table>
+  </div>
+  <div class="card">
+    <h2>AWTRIX 3 kompatibilní API</h2>
+    <p class="mut">Firmware přijímá stejné MQTT topicy i HTTP požadavky jako <b>AWTRIX 3</b>, takže fungují existující automatizace a blueprinty pro AWTRIX. Prefix MQTT je <code class="bt">awtrix_xxxxxx</code> (lze změnit v nastavení MQTT).</p>
+    <table>
+      <tr><th>MQTT <code>[PREFIX]/…</code></th><th>HTTP</th><th>Popis</th></tr>
+      <tr><td><code>notify</code></td><td><code>POST /api/notify</code></td><td>Notifikace – klíče: text (i barevné fragmenty <code>[{"t":"..","c":"FF0000"}]</code>), icon, color, background, gradient, rainbow, blinkText, fadeText, textCase, topText, textOffset, center, noScroll, scrollSpeed, repeat, duration, hold, wakeup, stack, progress, progressC, progressBC, bar, line, autoscale, barBC, draw (dp, dl, dr, df, dc, dfc, dt, db), effect</td></tr>
+      <tr><td><code>notify/dismiss</code></td><td><code>POST /api/notify/dismiss</code></td><td>Zavřít notifikaci s <code>hold</code></td></tr>
+      <tr><td><code>custom/&lt;app&gt;</code></td><td><code>POST /api/custom?name=</code></td><td>Custom aplikace (stejné klíče + lifetime, lifetimeMode), pole objektů = více aplikací, prázdné = smazat</td></tr>
+      <tr><td><code>indicator1..3</code></td><td><code>POST /api/indicator1..3</code></td><td><code>{"color":[255,0,0],"blink":500}</code>, prázdné / černá = vypnout</td></tr>
+      <tr><td><code>power</code>, <code>sleep</code></td><td><code>POST /api/power</code></td><td><code>{"power":true}</code></td></tr>
+      <tr><td><code>moodlight</code></td><td><code>POST /api/moodlight</code></td><td><code>{"brightness":170,"kelvin":2300}</code> nebo <code>{"color":"#FF00FF"}</code>, prázdné = vypnout</td></tr>
+      <tr><td><code>switch</code>, <code>nextapp</code>, <code>previousapp</code></td><td><code>POST /api/switch</code> …</td><td><code>{"name":"Time"}</code> (Time, Date nebo název stránky / aplikace)</td></tr>
+      <tr><td><code>settings</code></td><td><code>GET/POST /api/settings</code></td><td>BRI, ABRI, ATRANS, ATIME, TEFF, TSPEED, TCOL, WD, WDCA, WDCI, UPPERCASE, SOM, SSPEED, MATP, TFORMAT</td></tr>
+      <tr><td><code>stats</code> (odesílá panel)</td><td><code>GET /api/stats</code></td><td>Stav (bri, lux, ram, uptime, wifi_signal, app, …); dále <code>stats/currentApp</code>, <code>stats/buttonLeft|Select|Right</code></td></tr>
+      <tr><td><code>sendscreen</code> → <code>screen</code></td><td><code>GET /api/screen</code></td><td>Aktuální obraz jako pole barev</td></tr>
+      <tr><td><code>reboot</code></td><td><code>POST /api/reboot</code></td><td>Restart</td></tr>
+      <tr><td></td><td><code>GET /api/loop</code>, <code>/api/effects</code>, <code>/api/transitions</code></td><td>Seznamy</td></tr>
+    </table>
+    <p class="mut">Ikony: číselná ID z LaMetric (jako v AWTRIX) stáhneš na záložce <b>Ikony → Stáhnout z LaMetric</b>, uloží se pod stejným číslem. Zvuky (buzzer / DFPlayer) nejsou podporované.</p>
   </div>
   <div class="card">
     <h2>HTTP API</h2>
@@ -497,7 +522,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{border-bottom:1px
     <p class="mut">Notifikace z automatizace (MQTT):</p>
 <pre>action: mqtt.publish
 data:
-  topic: <span class="bt">hapanel/xxxxxx</span>/notify
+  topic: <span class="bt">awtrix_xxxxxx</span>/notify
   payload: >
     {"text": "Pračka dokončila", "icon": "washer", "color": "#00ff00", "repeat": 2, "wakeup": true}</pre>
     <p class="mut">Notifikace přes entitu notify (auto-discovery):</p>
@@ -688,7 +713,7 @@ async function loadStatus(){
   $('#sysinfo').innerHTML=[['Firmware',s.name+' '+s.version],['Sestaveno',s.build],['Čip',s.chip+' ('+s.cores+' jádra)'],['Flash',(s.flash/1048576).toFixed(0)+' MB'],
     ['Firmware',(s.sketch_size/1024|0)+' kB, volno pro OTA '+(s.sketch_free/1024|0)+' kB'],['Souborový systém',(s.fs_used/1024|0)+' / '+(s.fs_total/1024|0)+' kB'],
     ['Paměť',(s.heap/1024|0)+' kB (min '+(s.heap_min/1024|0)+' kB)'],['MAC',s.wifi.mac],['ID',s.id],['SSID',s.wifi.ssid||'–']].map(([k,v])=>`<b>${k}</b><span>${esc(v)}</span>`).join('');
-  $$('.bt').forEach(e=>e.textContent=CFG.mqtt?CFG.mqtt.topic:'hapanel/'+s.id);$$('.ip').forEach(e=>e.textContent=s.wifi.ip);$$('.hn').forEach(e=>e.textContent=s.hostname.replace(/-/g,'_'));
+  $$('.bt').forEach(e=>e.textContent=CFG.mqtt?CFG.mqtt.topic:'awtrix_'+s.id);$$('.ip').forEach(e=>e.textContent=s.wifi.ip);$$('.hn').forEach(e=>e.textContent=s.hostname.replace(/-/g,'_'));
   // live values in page list
   (s.apps.pages||[]).forEach((p,i)=>{const e=$(`#pgv-${i}`);if(e)e.textContent=p.error?'⚠ chyba šablony':(p.text||'');const r=$(`#pg-${i}`);if(r)r.classList.toggle('cur',s.apps.page_index===i)});
 }
@@ -897,6 +922,25 @@ $('#ie-import').onchange=e=>{const file=e.target.files[0];if(!file)return;const 
 $('#ie-export').onclick=()=>{const c=document.createElement('canvas');c.width=8*frames.length;c.height=8;const x=c.getContext('2d');
   frames.forEach((f,k)=>{const t=document.createElement('canvas');t.width=8;t.height=8;paintIcon(t,f);x.drawImage(t,k*8,0)});
   const a=document.createElement('a');a.href=c.toDataURL('image/png');a.download=($('#ie-name').value||'ikona')+'.png';a.click()};
+
+async function decodeFrames(blob){
+  // animated GIF -> frames via WebCodecs ImageDecoder when available, otherwise first frame only
+  const out=[];let delay=250;
+  const toFrame=(src,w,h)=>{const c=document.createElement('canvas');c.width=8;c.height=8;const x=c.getContext('2d');x.imageSmoothingEnabled=w>8||h>8;x.drawImage(src,0,0,8,8);
+    const d=x.getImageData(0,0,8,8).data,f=new Uint8Array(192);for(let i=0;i<64;i++){const a=d[i*4+3]/255;for(let k=0;k<3;k++)f[i*3+k]=Math.round(d[i*4+k]*a)}return f};
+  if(window.ImageDecoder&&blob.type){try{const dec=new ImageDecoder({data:await blob.arrayBuffer(),type:blob.type});await dec.tracks.ready;
+      const n=Math.min(8,dec.tracks.selectedTrack.frameCount||1);
+      for(let i=0;i<n;i++){const r=await dec.decode({frameIndex:i});out.push(toFrame(r.image,r.image.displayWidth,r.image.displayHeight));if(r.image.duration)delay=Math.max(50,Math.round(r.image.duration/1000));r.image.close()}
+      if(out.length)return{frames:out,delay}}catch(e){}}
+  const bmp=await createImageBitmap(blob);out.push(toFrame(bmp,bmp.width,bmp.height));return{frames:out,delay};
+}
+$('#ie-lm').onclick=async()=>{const id=$('#ie-lmid').value.trim();if(!/^\d+$/.test(id))return toast('Zadej číselné ID ikony (např. 2400)',1);
+  toast('Stahuji ikonu '+id+'…');
+  for(let i=0;i<40;i++){const r=await fetch('/api/lametric?id='+id);
+    if(r.status===200){const blob=await r.blob();try{const res=await decodeFrames(blob);frames=res.frames;curF=0;$('#ie-delay').value=res.delay;$('#ie-name').value=id;paintEd();
+        toast('Načteno ('+frames.length+' snímků) – ulož tlačítkem „Uložit do zařízení"')}catch(e){toast('Ikonu nelze dekódovat',1)}return}
+    if(r.status!==202){toast('Ikona '+id+' nenalezena',1);return}await sleep(500)}
+  toast('Vypršel čas stahování',1)};
 $('#ie-save').onclick=async()=>{const n=$('#ie-name').value.trim().toLowerCase();if(!/^[a-z0-9_-]{1,24}$/.test(n))return toast('Neplatný název (a-z, 0-9, _ -, max 24)',1);
   if(ICONS.some(i=>i.name===n&&i.builtin)&&!confirm('Přepsat vestavěnou ikonu vlastní verzí?'))return;
   try{await api('/api/icon',{body:{name:n,delay:+$('#ie-delay').value||250,frames:frames.map(frameToHex)}});delete iconCache[n];await loadIcons();renderLib();toast('Ikona uložena')}catch(e){toast(e.message,1)}};
@@ -930,9 +974,11 @@ $('#pwrpreset').onchange=e=>{if(e.target.value)$('[name="matrix.max_current"]').
 $$('[data-act=test]').forEach(b=>b.onclick=()=>api('/api/test',{method:'POST'}));
 $$('[data-act=raw]').forEach(b=>b.onclick=()=>api('/api/test?raw=1',{method:'POST'}));
 $('#hwpreset').onchange=e=>{const v=e.target.value,s=(n,val)=>{const el=$(`[name="${n}"]`);if(el.type==='checkbox')el.checked=val;else el.value=val};
-  if(v==='flex'){s('matrix.width',32);s('matrix.height',8);s('matrix.vertical',true);s('matrix.serpentine',true);s('matrix.start_right',false);s('matrix.start_bottom',false);s('matrix.order','GRB')}
-  if(v==='rows'){s('matrix.vertical',false);s('matrix.serpentine',true);s('matrix.start_right',false);s('matrix.start_bottom',false)}
-  if(v==='ulanzi'){s('matrix.pin',32);s('matrix.width',32);s('matrix.height',8);s('matrix.vertical',false);s('matrix.serpentine',true);s('matrix.start_right',false);s('matrix.start_bottom',false);s('matrix.order','GRB');
+  const base=()=>{s('matrix.width',32);s('matrix.height',8);s('matrix.start_right',false);s('matrix.start_bottom',false);s('matrix.tiled',false)};
+  if(v==='aw0'){base();s('matrix.vertical',false);s('matrix.serpentine',true)}
+  if(v==='aw1'){base();s('matrix.tiled',true)}
+  if(v==='aw2'){base();s('matrix.vertical',true);s('matrix.serpentine',true)}
+  if(v==='ulanzi'){s('matrix.tiled',false);s('matrix.pin',32);s('matrix.width',32);s('matrix.height',8);s('matrix.vertical',false);s('matrix.serpentine',true);s('matrix.start_right',false);s('matrix.start_bottom',false);s('matrix.order','GRB');
     s('display.ldr_pin',35);s('buttons.pins.0',26);s('buttons.pins.1',27);s('buttons.pins.2',14);toast('Nastaveno i čidlo a tlačítka – ulož všechny tři sekce')}};
 $('#scan').onclick=async()=>{$('#scan').textContent='Hledám…';for(let i=0;i<30;i++){const r=await fetch('/api/wifi/scan'+(i?'':'?refresh=1'));if(r.status===200){const d=await r.json();
   $('#ssids').innerHTML=d.networks.sort((a,b)=>b.rssi-a.rssi).map(n=>`<option value="${esc(n.ssid)}">${n.rssi} dBm${n.secure?' 🔒':''}</option>`).join('');$('#scan').textContent=d.networks.length+' sítí';$('[name="net.ssid"]').focus();return}await sleep(700)}$('#scan').textContent='Hledat sítě'};

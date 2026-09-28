@@ -28,6 +28,13 @@ void customList(JsonArray a);
 
 // indicators (1..3): object {color, blink} or empty to clear override
 void setIndicator(int idx, JsonVariantConst v);
+bool indicatorOn(int idx);
+
+// AWTRIX 3 compatible extras
+void setMoodlight(JsonVariantConst v);   // {"brightness":170,"kelvin":2300} / {"color":[..]}; empty = off
+bool moodlightOn();
+bool switchApp(const String& name);      // "Time", "Date" or page / custom app name
+void loopJson(JsonObject o);             // {"app name": position}
 
 // values rendered by Home Assistant templates
 void setTemplateResult(uint8_t page, uint8_t field, const String& value, bool error = false);

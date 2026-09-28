@@ -80,6 +80,7 @@ struct Config {
   int8_t ledPin = DEFAULT_LED_PIN;
   uint8_t width = 32, height = 8;
   bool vertical = true, serpentine = true, startRight = false, startBottom = false;
+  bool tiled = false;             // 4x 8x8 tiles, rows progressive (AWTRIX matrix layout 1)
   String colorOrder = "GRB";
   uint16_t maxCurrent = 850;      // mA, 0 = unlimited (850 = safe when powered through the board/USB, like WLED)
   bool gamma = true;
@@ -97,6 +98,7 @@ struct Config {
   uint16_t transitionMs = 400;
   int8_t textY = 1;
   bool autoRotate = true;
+  uint16_t appTime = 8;           // default display time of custom apps (AWTRIX ATIME), s
   bool uppercase = false;
 
   // --- time

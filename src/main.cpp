@@ -3,6 +3,7 @@
 #include <ArduinoOTA.h>
 #include <LittleFS.h>
 #include <WiFi.h>
+#include <esp_mac.h>
 #include "apps.h"
 #include "config.h"
 #include "display.h"
@@ -42,9 +43,11 @@ void setup() {
   delay(200);
   gLock = xSemaphoreCreateRecursiveMutex();
 
-  uint64_t mac = ESP.getEfuseMac();
+  // last 3 bytes of the MAC address (same scheme as AWTRIX: awtrix_xxxxxx)
+  uint8_t mac[6];
+  esp_read_mac(mac, ESP_MAC_WIFI_STA);
   char id[8];
-  snprintf(id, sizeof(id), "%06x", (uint32_t)((mac >> 24) & 0xFFFFFF));
+  snprintf(id, sizeof(id), "%02x%02x%02x", mac[3], mac[4], mac[5]);
   deviceId = id;
   Serial.printf("\n%s %s  id=%s\n", FW_NAME, FW_VERSION, id);
 

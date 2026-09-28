@@ -93,8 +93,16 @@ static String secret(const String& s, bool withSecrets) {
 
 void configInitDefaults() {
   cfg = Config();
-  cfg.mqttTopic = "hapanel/" + deviceId;
+  cfg.mqttTopic = "awtrix_" + deviceId;  // same prefix scheme as AWTRIX 3
   cfg.hostname = "hapanel-" + deviceId;
+#if defined(HW_AWTRIX) || defined(HW_ULANZI)
+  // AWTRIX 3 DIY wiring: matrix GPIO32, layout 0 (rows, zigzag), buttons 26 / 27 / 14
+  cfg.vertical = false;
+  cfg.serpentine = true;
+  cfg.btnPins[0] = 26;
+  cfg.btnPins[1] = 27;
+  cfg.btnPins[2] = 14;
+#endif
 #ifdef HW_ULANZI
   // Ulanzi TC001 (AWTRIX hardware): row-wise zigzag matrix, LDR and 3 buttons
   cfg.vertical = false;
@@ -145,7 +153,7 @@ void configToJson(JsonObject o, bool s) {
   JsonObject x = o["matrix"].to<JsonObject>();
   x["pin"] = cfg.ledPin; x["width"] = cfg.width; x["height"] = cfg.height;
   x["vertical"] = cfg.vertical; x["serpentine"] = cfg.serpentine;
-  x["start_right"] = cfg.startRight; x["start_bottom"] = cfg.startBottom;
+  x["start_right"] = cfg.startRight; x["start_bottom"] = cfg.startBottom; x["tiled"] = cfg.tiled;
   x["order"] = cfg.colorOrder; x["max_current"] = cfg.maxCurrent; x["gamma"] = cfg.gamma;
 
   JsonObject d = o["display"].to<JsonObject>();
@@ -155,6 +163,7 @@ void configToJson(JsonObject o, bool s) {
   d["text_color"] = colorToHex(cfg.textColor);
   d["scroll_speed"] = cfg.scrollSpeed; d["transition"] = cfg.transition; d["transition_ms"] = cfg.transitionMs;
   d["text_y"] = cfg.textY; d["auto_rotate"] = cfg.autoRotate; d["uppercase"] = cfg.uppercase;
+  d["app_time"] = cfg.appTime;
 
   JsonObject t = o["time"].to<JsonObject>();
   t["ntp"] = cfg.ntp; t["tz"] = cfg.tz; t["h24"] = cfg.h24; t["seconds"] = cfg.showSeconds;
@@ -210,7 +219,7 @@ uint32_t configFromJson(JsonObjectConst o) {
     upd(cfg.discovery, m["discovery"], c, CFG_CHG_MQTT);
     updStr(cfg.discoveryPrefix, m["prefix"], c, CFG_CHG_MQTT);
     while (cfg.mqttTopic.endsWith("/")) cfg.mqttTopic.remove(cfg.mqttTopic.length() - 1);
-    if (cfg.mqttTopic.isEmpty()) cfg.mqttTopic = "hapanel/" + deviceId;
+    if (cfg.mqttTopic.isEmpty()) cfg.mqttTopic = "awtrix_" + deviceId;
   }
   JsonObjectConst x = o["matrix"];
   if (!x.isNull()) {
@@ -221,6 +230,7 @@ uint32_t configFromJson(JsonObjectConst o) {
     upd(cfg.serpentine, x["serpentine"], c, CFG_CHG_DISPLAY);
     upd(cfg.startRight, x["start_right"], c, CFG_CHG_DISPLAY);
     upd(cfg.startBottom, x["start_bottom"], c, CFG_CHG_DISPLAY);
+    upd(cfg.tiled, x["tiled"], c, CFG_CHG_DISPLAY);
     updStr(cfg.colorOrder, x["order"], c, R);
     upd(cfg.maxCurrent, x["max_current"], c, CFG_CHG_DISPLAY);
     upd(cfg.gamma, x["gamma"], c, CFG_CHG_DISPLAY);
@@ -246,6 +256,8 @@ uint32_t configFromJson(JsonObjectConst o) {
     upd(cfg.textY, d["text_y"], c, D);
     upd(cfg.autoRotate, d["auto_rotate"], c, D);
     upd(cfg.uppercase, d["uppercase"], c, D);
+    upd(cfg.appTime, d["app_time"], c, D);
+    cfg.appTime = constrain(cfg.appTime, 1, 3600);
     cfg.scrollSpeed = constrain(cfg.scrollSpeed, 5, 120);
   }
   JsonObjectConst t = o["time"];
