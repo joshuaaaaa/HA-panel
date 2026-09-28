@@ -1,5 +1,5 @@
 #include "display.h"
-#include <Adafruit_NeoPixel.h>
+#include <NeoPixelBus.h>
 #include "config.h"
 #include "font.h"
 
@@ -248,19 +248,41 @@ String toUpperUtf8(const String& s) {
 // ================================================================ LED output
 namespace Display {
 
-static Adafruit_NeoPixel* strip = nullptr;
+// WS2812 driver: NeoPixelBus over RMT channel 0 (same driver family as WLED).
+// The bus always sends G,R,B; the configured color order is applied by permuting
+// the channels before they are handed to the bus.
+typedef NeoPixelBus<NeoGrbFeature, NeoEsp32Rmt0Ws2812xMethod> Bus;
+
+class Strip {
+ public:
+  Strip(int n, int pin, const String& order) : bus_(n, pin) {
+    // wire position (0,1,2) -> source channel (0=r,1=g,2=b)
+    const char* o = order.length() == 3 ? order.c_str() : "GRB";
+    for (int i = 0; i < 3; i++) src_[i] = o[i] == 'R' ? 0 : o[i] == 'G' ? 1 : 2;
+  }
+  void begin() { bus_.Begin(); }
+  void setPixelColor(int i, uint8_t r, uint8_t g, uint8_t b) {
+    uint8_t c[3] = {r, g, b};
+    // NeoGrbFeature transmits (G, R, B) of the RgbColor
+    bus_.SetPixelColor(i, RgbColor(c[src_[1]], c[src_[0]], c[src_[2]]));
+  }
+  void show() { bus_.Show(); }
+
+ private:
+  Bus bus_;
+  uint8_t src_[3];
+};
+
+static Strip* strip = nullptr;
+
+static uint8_t gammaTable[256];
+static void initGamma() {
+  for (int i = 0; i < 256; i++) gammaTable[i] = (uint8_t)(powf(i / 255.0f, 2.6f) * 255.0f + 0.5f);
+}
 static uint8_t curBright = 0;
 static uint16_t lastCurrent = 0;
 static int nLeds = 0;
 
-static neoPixelType orderType(const String& o) {
-  if (o == "RGB") return NEO_RGB;
-  if (o == "RBG") return NEO_RBG;
-  if (o == "BRG") return NEO_BRG;
-  if (o == "BGR") return NEO_BGR;
-  if (o == "GBR") return NEO_GBR;
-  return NEO_GRB;
-}
 
 static volatile uint32_t rawTestUntil = 0;
 static uint32_t fpsCount = 0, fpsStart = 0;
@@ -274,7 +296,8 @@ static void fillAll(uint8_t r, uint8_t g, uint8_t b) {
 void begin() {
   nLeds = cfg.width * cfg.height;
   Serial.printf("[led] %d LEDs on GPIO%d, order %s\n", nLeds, cfg.ledPin, cfg.colorOrder.c_str());
-  strip = new Adafruit_NeoPixel(nLeds, cfg.ledPin, orderType(cfg.colorOrder) + NEO_KHZ800);
+  initGamma();
+  strip = new Strip(nLeds, cfg.ledPin, cfg.colorOrder);
   strip->begin();
   // power-on self test: short dim red / green / blue flash of the whole panel
   // (if this does not appear, the problem is wiring / data pin / power, not the settings)
@@ -336,9 +359,9 @@ void show(const Canvas& c, uint8_t target) {
     for (int x = 0; x < W; x++) {
       RGB p = c.buf[y * c.w + x];
       if (cfg.gamma) {
-        p.r = Adafruit_NeoPixel::gamma8(p.r);
-        p.g = Adafruit_NeoPixel::gamma8(p.g);
-        p.b = Adafruit_NeoPixel::gamma8(p.b);
+        p.r = gammaTable[p.r];
+        p.g = gammaTable[p.g];
+        p.b = gammaTable[p.b];
       }
       uint8_t r = (p.r * (curBright + 1)) >> 8, g = (p.g * (curBright + 1)) >> 8, b = (p.b * (curBright + 1)) >> 8;
       // keep very dim pixels visible at low brightness
