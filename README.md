@@ -279,6 +279,11 @@ firmware/              hotové binární soubory
 ```
 
 ## Řešení problémů
+- **Panel nedá ani jedno bliknutí (ani LED na panelu)** → panel pravděpodobně nemá napájení.
+  U ESP32-S3 desek se **dvěma USB-C** (DevKitC-1 a klony „YD-ESP32-S3“) nejde napájení z portu
+  **USB/OTG** na pin 5V, dokud nejsou propojené plošky **IN-OUT** (jumper vedle portu).
+  Změř napětí mezi 5V a GND: kolem 0 V = tohle. Řešení: napájet přes druhý port **COM/UART**,
+  propojit (zapájet) plošky IN-OUT, nebo dát panelu samostatný zdroj 5 V (GND spojit s deskou).
 - **Nevíš, na kterém pinu panel je** → na přehledu tlačítko **Najít pin**: firmware postupně zkouší
   všechna volná GPIO (každé 3,5 s, bílé světlo). Když panel zasvítí, klikni *Použít tento pin*.
 - **Po nahrání nic nesvítí** → po zapnutí panel vždy krátce blikne červeně, zeleně a modře
