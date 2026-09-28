@@ -8,7 +8,7 @@
  *   2. Settings -> Dashboards -> ⋮ -> Resources -> Add: /local/hapanel-card.js (JavaScript module)
  *   3. add card: type: custom:hapanel-card, entity: light.<panel>_displej
  */
-const CARD_VERSION = "1.2.0";
+const CARD_VERSION = "1.2.1";
 
 // entity names published by the firmware (MQTT discovery); matched against friendly_name
 const NAMES = {
@@ -203,6 +203,11 @@ class HAPanelCard extends HTMLElement {
         .pged .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
         .tres{font-family:monospace;font-size:.8em;background:var(--secondary-background-color);border-radius:6px;padding:4px 6px;margin-top:3px;white-space:pre-wrap}
         .tres.err{color:var(--error-color,#db4437)}
+        .ep-res{max-height:220px;overflow:auto;border:1px solid var(--divider-color);border-radius:8px;margin:4px 0}
+        .ep-row{display:grid;grid-template-columns:1fr auto;padding:5px 8px;cursor:pointer;border-bottom:1px solid var(--divider-color);font-size:.85em}
+        .ep-row:hover,.ep-row.sel{background:var(--secondary-background-color)}
+        .ep-row .ep-id{grid-column:1;font-family:monospace;font-size:.85em;color:var(--secondary-text-color)}
+        .ep-row .ep-st{grid-row:1/3;grid-column:2;align-self:center;color:var(--primary-color);font-family:monospace}
       </style>
       <div class="hp">
         <div class="hd"><span class="dot" id="online"></span><span class="t" id="title"></span><span class="app" id="app"></span>
@@ -683,6 +688,59 @@ class HAPanelCard extends HTMLElement {
     box.hidden = false;
   }
 
+  // entity picker: section (domain) + search, filtered locally (fast with thousands of entities)
+  _initPicker(box, ed) {
+    if (box._init) return;
+    box._init = true;
+    const input = ed.querySelector(`[data-k="${box.dataset.target}"]`);
+    const states = this._hass.states;
+    const counts = {};
+    for (const id in states) {
+      const d = id.split(".")[0];
+      counts[d] = (counts[d] || 0) + 1;
+    }
+    const DCZ = { sensor: "Senzory", binary_sensor: "Binární senzory", light: "Světla", switch: "Spínače", climate: "Klima",
+      weather: "Počasí", person: "Osoby", device_tracker: "Poloha", cover: "Rolety", media_player: "Média", input_number: "Pomocníci – čísla",
+      input_boolean: "Pomocníci – přepínače", input_select: "Pomocníci – výběr", input_text: "Pomocníci – text", number: "Čísla",
+      select: "Výběry", button: "Tlačítka", script: "Skripty", automation: "Automatizace", scene: "Scény", sun: "Slunce", lock: "Zámky",
+      fan: "Ventilátory", vacuum: "Vysavače", camera: "Kamery", calendar: "Kalendáře", update: "Aktualizace", event: "Události" };
+    const domains = Object.keys(counts).sort((a, b) => (DCZ[a] || a).localeCompare(DCZ[b] || b));
+    const cur = (input.value.split(".")[0]) || box.dataset.domain;
+    box.innerHTML = `<div class="row" style="margin:4px 0"><select class="ep-dom"><option value="">Všechny sekce (${Object.keys(states).length})</option>${domains
+      .map((d) => `<option value="${d}" ${d === cur ? "selected" : ""}>${esc(DCZ[d] || d)} (${counts[d]})</option>`).join("")}</select>
+      <input type="text" class="ep-q grow" placeholder="Hledat podle názvu nebo ID…"></div><div class="ep-res"></div><div class="muted ep-hint"></div>`;
+    const dom = box.querySelector(".ep-dom"), q = box.querySelector(".ep-q"), res = box.querySelector(".ep-res"), hint = box.querySelector(".ep-hint");
+    const norm = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+    const search = () => {
+      const d = dom.value, words = norm(q.value).split(/\s+/).filter(Boolean);
+      const out = [];
+      for (const id in states) {
+        if (d && !id.startsWith(d + ".")) continue;
+        const st = states[id];
+        const hay = norm(id + " " + (st.attributes.friendly_name || ""));
+        if (words.every((w) => hay.includes(w))) out.push(id);
+        if (out.length >= 300) break;
+      }
+      out.sort();
+      const shown = out.slice(0, 60);
+      res.innerHTML = shown.map((id) => {
+        const st = states[id];
+        const unit = st.attributes.unit_of_measurement || "";
+        return `<div class="ep-row" data-id="${esc(id)}"><b>${esc(st.attributes.friendly_name || id)}</b><span class="ep-st">${esc(st.state)}${unit ? " " + esc(unit) : ""}</span><span class="ep-id">${esc(id)}</span></div>`;
+      }).join("") || '<div class="muted" style="padding:6px">Nic nenalezeno</div>';
+      hint.textContent = out.length > 60 ? `Zobrazeno 60 z ${out.length >= 300 ? "300+" : out.length} – upřesni hledání.` : `${out.length} nalezeno`;
+      res.querySelectorAll(".ep-row").forEach((r) => (r.onclick = () => {
+        input.value = r.dataset.id;
+        res.querySelectorAll(".ep-row").forEach((x) => x.classList.toggle("sel", x === r));
+      }));
+    };
+    let t;
+    q.oninput = () => { clearTimeout(t); t = setTimeout(search, 150); };
+    dom.onchange = search;
+    if (input.value) q.value = input.value.split(".").slice(1).join(".");
+    search();
+  }
+
   async _renderOnce(template) {
     return new Promise(async (resolve) => {
       let unsub;
@@ -707,7 +765,6 @@ class HAPanelCard extends HTMLElement {
     const info = (this._st("app") || {}).attributes || {};
     const icons = info.icons || [];
     const effects = info.effects || ["rainbow", "plasma", "fire", "matrix", "snow"];
-    const ents = Object.keys(this._hass.states).sort();
     const opt = (list, cur, empty) =>
       (empty !== undefined ? `<option value="">${empty}</option>` : "") +
       (cur && !list.includes(cur) ? [cur, ...list] : list).map((o) => `<option value="${esc(o)}" ${o === cur ? "selected" : ""}>${esc(o)}</option>`).join("");
@@ -724,8 +781,8 @@ class HAPanelCard extends HTMLElement {
       </div>
       <div data-for="clock"><label>Styl hodin</label><select data-k="style"><option value="1" ${p.style == 1 ? "selected" : ""}>Velké číslice</option><option value="0" ${p.style == 1 ? "" : "selected"}>Malé číslice</option></select></div>
       <div data-for="entity">
-        <label>Entita</label><input type="text" data-k="entity" list="hp-ents" value="${esc(p.entity)}" placeholder="sensor.…">
-        <datalist id="hp-ents">${ents.map((e) => `<option value="${e}">${esc(this._hass.states[e].attributes.friendly_name || "")}</option>`).join("")}</datalist>
+        <label>Entita</label><input type="text" data-k="entity" value="${esc(p.entity)}" placeholder="sensor.…" autocomplete="off">
+        <div class="epick" data-target="entity" data-domain="sensor"></div>
         <div class="two">
           <div><label>Desetinná místa (−1 = beze změny)</label><input type="number" data-k="decimals" value="${p.decimals}" min="-1" max="4" style="width:100%"></div>
           <div><label>Jednotka (prázdné = z HA, "-" = žádná)</label><input type="text" data-k="unit" value="${esc(p.unit)}"></div>
@@ -749,7 +806,8 @@ class HAPanelCard extends HTMLElement {
       </details>
       <details><summary>Akce prostředního tlačítka</summary>
         <label>Akce</label><select data-k="action"><option value="">Další stránka</option><option value="toggle" ${p.action === "toggle" ? "selected" : ""}>Přepnout entitu</option><option value="service" ${p.action === "service" ? "selected" : ""}>Zavolat službu</option></select>
-        <label>Entita akce (prázdné = entita stránky)</label><input type="text" data-k="action_entity" list="hp-ents" value="${esc(p.action_entity)}">
+        <label>Entita akce (prázdné = entita stránky)</label><input type="text" data-k="action_entity" value="${esc(p.action_entity)}" autocomplete="off">
+        <div class="epick" data-target="action_entity" data-domain="light" data-lazy="1"></div>
         <label>Služba (domain.service)</label><input type="text" data-k="action_service" value="${esc(p.action_service)}" placeholder="script.turn_on">
       </details>
       <div class="row">
@@ -783,6 +841,10 @@ class HAPanelCard extends HTMLElement {
     };
     q('[data-k="type"]').onchange = updType;
     updType();
+    all(".epick").forEach((box) => {
+      if (box.dataset.lazy) box.closest("details").addEventListener("toggle", (e) => e.target.open && this._initPicker(box, ed));
+      else this._initPicker(box, ed);
+    });
     q("#edcancel").onclick = () => (ed.hidden = true);
     if (q("#eddel")) q("#eddel").onclick = () => {
       if (!confirm("Smazat stránku " + p.name + "?")) return;

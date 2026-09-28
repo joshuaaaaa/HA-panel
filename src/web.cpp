@@ -520,24 +520,26 @@ static void routes() {
     sendDoc(r, d);
   });
 
+  // entity search: ?domains=1 -> domain list, ?domain=sensor&q=text -> up to 60 matches (202 while pending)
   server.on("/api/ha/entities", HTTP_GET, [](AsyncWebServerRequest* r) {
     if (!auth(r)) return;
     if (!cfg.haEnabled || cfg.haToken.isEmpty()) return r->send(400, "text/plain", "HA not configured");
-    HA::JobState st = HA::entitiesState();
-    if (st == HA::JOB_DONE) {
-      Lock l;
-      return r->send(200, "text/plain; charset=utf-8", HA::entitiesData());
+    String key = "*";
+    if (!r->hasParam("domains")) {
+      key = (r->hasParam("domain") ? r->getParam("domain")->value() : String("")) + "|" +
+            (r->hasParam("q") ? r->getParam("q")->value() : String(""));
     }
-    if (st == HA::JOB_ERROR) {
-      String err;
+    HA::JobState st = HA::entitiesState(key);
+    if (st == HA::JOB_DONE || st == HA::JOB_ERROR) {
+      String data;
       {
         Lock l;
-        err = HA::entitiesData();
+        data = HA::entitiesData();
       }
-      HA::requestEntities();
-      return r->send(502, "text/plain", err);
+      if (st == HA::JOB_ERROR) HA::requestEntities(key);
+      return r->send(st == HA::JOB_DONE ? 200 : 502, "text/plain; charset=utf-8", data);
     }
-    HA::requestEntities();
+    HA::requestEntities(key);
     r->send(202, "text/plain", "pending");
   });
 

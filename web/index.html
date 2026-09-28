@@ -94,6 +94,9 @@ details{border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin:
 details summary{cursor:pointer;font-weight:600;font-size:14px}
 .tres{font-family:ui-monospace,monospace;font-size:12px;background:var(--card2);border-radius:6px;padding:6px 8px;margin:-4px 0 10px;white-space:pre-wrap;display:none}
 .tres.err{color:var(--err)}
+.ep-res{max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:8px;margin:6px 0}
+.ep-row{display:grid;grid-template-columns:1fr auto;gap:0 10px;padding:6px 10px;cursor:pointer;border-bottom:1px solid var(--line);font-size:13px}
+.ep-row:hover,.ep-row.sel{background:var(--card2)}.ep-row .mono{grid-column:1;color:var(--mut);font-size:11.5px}.ep-row .ep-st{grid-row:1/3;grid-column:2;align-self:center;color:var(--acc);font-family:ui-monospace,monospace;font-size:12px}
 .ipick{display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:4px 10px 4px 4px;min-height:38px}
 .ipick canvas{width:28px;height:28px}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--card2);border:1px solid var(--line);padding:10px 16px;border-radius:10px;box-shadow:0 8px 30px #0006;opacity:0;transition:.25s;pointer-events:none;z-index:99}
@@ -572,8 +575,8 @@ data:
         <label class="f"><span>Styl hodin</span><select name="style" data-num><option value="1">Velké číslice (4×7)</option><option value="0">Malé číslice (3×5)</option></select></label>
       </div>
       <div data-for="entity">
-        <label class="f"><span>Entita</span><input name="entity" list="entities" placeholder="sensor.obyvak_teplota" autocomplete="off"></label>
-        <p class="hint" id="ent-hint">Začni psát – seznam entit se načte z HA.</p>
+        <label class="f"><span>Entita</span><input name="entity" placeholder="sensor.obyvak_teplota" autocomplete="off"></label>
+        <div class="epick" data-target="entity"></div>
         <div class="row">
           <label class="f"><span>Desetinná místa (−1 = beze změny)</span><input type="number" name="decimals" min="-1" max="4"></label>
           <label class="f"><span>Jednotka (prázdné = z HA, "-" = žádná)</span><input name="unit" placeholder="°C"></label>
@@ -612,7 +615,8 @@ data:
       <details>
         <summary>Akce prostředního tlačítka</summary>
         <label class="f" style="margin-top:8px"><span>Akce</span><select name="action"><option value="">Další stránka</option><option value="toggle">Přepnout entitu (toggle)</option><option value="service">Zavolat službu</option></select></label>
-        <label class="f"><span>Entita akce (prázdné = entita stránky)</span><input name="action_entity" list="entities"></label>
+        <label class="f"><span>Entita akce (prázdné = entita stránky)</span><input name="action_entity" autocomplete="off"></label>
+        <div class="epick" data-target="action_entity" data-domain="light"></div>
         <label class="f"><span>Služba (domain.service)</span><input name="action_service" placeholder="script.turn_on"></label>
       </details>
       <div class="row" style="margin-top:6px">
@@ -639,7 +643,6 @@ data:
   <div class="bd"><div class="icons" id="ip-grid"></div></div>
 </dialog>
 
-<datalist id="entities"></datalist>
 <div id="toast"></div>
 
 <script>
@@ -818,7 +821,8 @@ let editIdx=-1;
 function fillFx(sel,type){sel.innerHTML=(type==='effect'?'':'<option value="">— žádný —</option>')+EFFECTS.map(e=>`<option>${e}</option>`).join('')}
 function updType(){const t=$('#pg-type').value;$$('#pgform [data-for]').forEach(d=>{const on=d.dataset.for===t;d.style.display=on?'':'none';$$('input,textarea,select',d).forEach(x=>x.disabled=!on)});
   $('#fx-label').textContent=t==='effect'?'Efekt':'Efekt v pozadí';const v=$('#pg-fx').value;fillFx($('#pg-fx'),t);$('#pg-fx').value=v||(t==='effect'?'fire':'');
-  if(t==='entity'||$$('#pgform [name=action_entity]').length)loadEntities()}
+  if(t==='entity')$$('#pgform [data-for="entity"] .epick').forEach(initPicker)}
+$('#pgform [data-target="action_entity"]').closest('details').addEventListener('toggle',e=>{if(e.target.open)initPicker($('#pgform [data-target="action_entity"]'))});
 $('#pg-type').onchange=updType;
 function editPage(i,preset){
   editIdx=i;const p={...PAGE_DEF,...(preset||PAGES[i])};const f=$('#pgform');
@@ -833,6 +837,7 @@ function editPage(i,preset){
   $$('.tres',f).forEach(x=>{x.style.display='none'});$('#pg-testres').textContent='';
   fillFx($('#pg-fx'),p.type);$('#pg-fx').value=p.effect;
   $$('details',f).forEach(d=>d.open=!!(p.color_tpl||p.icon_tpl||p.visible_tpl||p.progress_tpl)&&d.querySelector('[name=color_tpl]')||!!p.action&&!!d.querySelector('[name=action]'));
+  $$('#pgform .epick').forEach(b=>{b._init=false;b.innerHTML=''});
   updType();$('#dlg-page').returnValue='';$('#dlg-page').showModal();
 }
 $('#dlg-page').addEventListener('close',async()=>{
@@ -869,14 +874,37 @@ $('#pg-testall').onclick=async()=>{
   }
   if(!jobs.some(j=>!j[0]))$('#pg-testres').textContent='Hotovo';
 };
-let entLoaded=false;
-async function loadEntities(){
-  if(entLoaded||!CFG.ha||!CFG.ha.enabled)return;entLoaded=true;$('#ent-hint').textContent='Načítám entity z HA…';
-  for(let i=0;i<40;i++){const r=await fetch('/api/ha/entities');if(r.status===200){const t=await r.text();const dl=$('#entities');dl.innerHTML='';let n=0;
-      t.split('\n').forEach(l=>{if(!l)return;const[id,name]=l.split('\t');const o=document.createElement('option');o.value=id;o.label=name||'';dl.append(o);n++});
-      $('#ent-hint').textContent=n+' entit načteno z HA';return}
-    if(r.status!==202){$('#ent-hint').textContent='Seznam entit nedostupný ('+(await r.text())+')';entLoaded=false;return}await sleep(700)}
-  entLoaded=false;
+/* entity picker: domain (section) + search, executed in HA (fast even with thousands of entities) */
+let haDomains=null;
+async function haEntities(params){
+  for(let i=0;i<40;i++){const r=await fetch('/api/ha/entities?'+params);
+    if(r.status===200)return(await r.text()).split('\n').filter(Boolean).map(l=>l.split('\t'));
+    if(r.status!==202)throw new Error(await r.text());await sleep(250)}
+  throw new Error('HA neodpovídá');
+}
+const DOMAIN_CZ={sensor:'Senzory',binary_sensor:'Binární senzory',light:'Světla',switch:'Spínače',climate:'Klima',weather:'Počasí',
+  person:'Osoby',device_tracker:'Poloha',cover:'Rolety',media_player:'Média',input_number:'Pomocníci – čísla',input_boolean:'Pomocníci – přepínače',
+  input_select:'Pomocníci – výběr',input_text:'Pomocníci – text',number:'Čísla',select:'Výběry',button:'Tlačítka',script:'Skripty',
+  automation:'Automatizace',scene:'Scény',sun:'Slunce',zone:'Zóny',lock:'Zámky',fan:'Ventilátory',vacuum:'Vysavače',camera:'Kamery',
+  calendar:'Kalendáře',todo:'Úkoly',update:'Aktualizace',event:'Události',water_heater:'Ohřev vody',alarm_control_panel:'Alarm'};
+function initPicker(box){
+  if(box._init){return}box._init=true;
+  const input=$(`#pgform [name="${box.dataset.target}"]`);
+  box.innerHTML=`<div class="row"><select class="ep-dom" style="flex:0 1 190px"><option value="">Všechny sekce</option></select>
+    <input class="ep-q" placeholder="Hledat podle názvu nebo ID…" autocomplete="off"></div><div class="ep-res"></div><p class="hint ep-hint"></p>`;
+  const dom=$('.ep-dom',box),q=$('.ep-q',box),res=$('.ep-res',box),hint=$('.ep-hint',box);
+  if(!CFG.ha||!CFG.ha.enabled){hint.textContent='Pro výběr entit zapni připojení k Home Assistantu.';return}
+  const fillDomains=()=>{dom.innerHTML='<option value="">Všechny sekce</option>'+haDomains.map(([d,n])=>`<option value="${d}">${esc(DOMAIN_CZ[d]||d)} (${n})</option>`).join('');
+    const cur=(input.value.split('.')[0])||box.dataset.domain||'sensor';if(haDomains.some(x=>x[0]===cur))dom.value=cur};
+  let seq=0;
+  const search=async()=>{const my=++seq;hint.textContent='Hledám…';
+    try{const rows=await haEntities('domain='+encodeURIComponent(dom.value)+'&q='+encodeURIComponent(q.value.trim()));if(my!==seq)return;
+      res.innerHTML=rows.map(([id,name,st,unit])=>`<div class="ep-row" data-id="${esc(id)}"><b>${esc(name||id)}</b><span class="mono">${esc(id)}</span><span class="ep-st">${esc(st)}${unit?' '+esc(unit):''}</span></div>`).join('')||'<p class="mut">Nic nenalezeno</p>';
+      hint.textContent=rows.length>=60?'Zobrazeno prvních 60 – upřesni hledání.':rows.length+' nalezeno';
+      $$('.ep-row',res).forEach(r=>r.onclick=()=>{input.value=r.dataset.id;$$('.ep-row',res).forEach(x=>x.classList.toggle('sel',x===r))});
+    }catch(e){if(my===seq)hint.textContent='Chyba: '+e.message}};
+  let t;q.oninput=()=>{clearTimeout(t);t=setTimeout(search,300)};dom.onchange=search;
+  (async()=>{try{if(!haDomains)haDomains=await haEntities('domains=1');fillDomains();if(input.value)q.value=input.value.split('.').slice(1).join('.');search()}catch(e){hint.textContent='Chyba: '+e.message}})();
 }
 
 /* ---------------------------------------------------------------- icon editor */

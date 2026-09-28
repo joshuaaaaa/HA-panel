@@ -39,7 +39,7 @@ static bool needResub = false;
 
 // jobs
 static JobState entState = JOB_IDLE, rndState = JOB_IDLE;
-static String entData, rndTemplate, rndResult;
+static String entData, entKey, rndTemplate, rndResult;
 static uint32_t entTime = 0;
 
 // ---------------------------------------------------------------- URL helpers
@@ -368,24 +368,49 @@ static int renderRest(const String& tpl, String& out, size_t maxLen) {
   return code;
 }
 
+// entity search: key "*" = list of domains with counts, otherwise "<domain>|<query>"
+static String searchTemplate(const String& key) {
+  if (key == "*")
+    return "{% for g in states|groupby('domain') %}{{ g.grouper ~ '\\t' ~ (g.list|length) ~ '\\n' }}{% endfor %}";
+  int bar = key.indexOf('|');
+  String domain = bar >= 0 ? key.substring(0, bar) : "";
+  String q = bar >= 0 ? key.substring(bar + 1) : key;
+  // sanitize: only characters that are safe inside a Jinja string literal
+  String qs, ds;
+  for (char c : q)
+    if (c != '\'' && c != '\\' && c != '{' && c != '}' && c != '%' && c != '\n') qs += c;
+  for (char c : domain)
+    if (isalnum((unsigned char)c) || c == '_') ds += c;
+  qs.toLowerCase();
+  String src = ds.length() ? "states." + ds : "states";
+  return "{% set q = '" + qs + "' %}{% set ns = namespace(n=0) %}{% for s in " + src +
+         "|sort(attribute='entity_id') %}{% if ns.n < 60 and (q in s.entity_id or q in (s.name|lower)) %}"
+         "{% set ns.n = ns.n + 1 %}{{ s.entity_id ~ '\\t' ~ (s.name|replace('\\t',' ')|replace('\\n',' ')) ~ '\\t' ~ "
+         "s.state ~ '\\t' ~ (s.attributes.unit_of_measurement|default('')) ~ '\\n' }}{% endif %}{% endfor %}";
+}
+
 static void runJobs() {
   if (entState == JOB_PENDING) {
-    entState = JOB_RUNNING;
-    String tpl =
-        "{% for s in states|sort(attribute='entity_id') %}{{ s.entity_id ~ '\\t' ~ (s.name|replace('\\n',' ')) ~ '\\n' "
-        "}}{% endfor %}";
-    String out;
-    int code = renderRest(tpl, out, 64 * 1024);
-    Lock l;
-    if (code == 200) {
-      entData = std::move(out);
-      entState = JOB_DONE;
-      entTime = millis();
-    } else {
-      entData = "HTTP " + String(code);
-      entState = JOB_ERROR;
+    String key;
+    {
+      Lock l;
+      entState = JOB_RUNNING;
+      key = entKey;
     }
-    Serial.printf("[ha] entity list: code %d, %u bytes\n", code, entData.length());
+    String out;
+    int code = renderRest(searchTemplate(key), out, 12 * 1024);
+    Lock l;
+    if (key == entKey) {  // a newer search may have been requested meanwhile
+      if (code == 200) {
+        entData = std::move(out);
+        entState = JOB_DONE;
+        entTime = millis();
+      } else {
+        entData = "HTTP " + String(code);
+        entState = JOB_ERROR;
+      }
+    }
+    Serial.printf("[ha] entity search '%s': code %d, %u bytes\n", key.c_str(), code, entData.length());
   }
   if (rndState == JOB_PENDING) {
     String tpl;
@@ -407,13 +432,16 @@ static void runJobs() {
   }
 }
 
-void requestEntities() {
+void requestEntities(const String& key) {
   Lock l;
-  if (entState == JOB_RUNNING || entState == JOB_PENDING) return;
-  if (entState == JOB_DONE && millis() - entTime < 60000) return;
+  if (key == entKey) {
+    if (entState == JOB_RUNNING || entState == JOB_PENDING) return;
+    if (entState == JOB_DONE && millis() - entTime < 20000) return;
+  }
+  entKey = key;
   entState = JOB_PENDING;
 }
-JobState entitiesState() { return entState; }
+JobState entitiesState(const String& key) { return key == entKey ? entState : JOB_IDLE; }
 const String& entitiesData() { return entData; }
 
 void requestRender(const String& tpl) {
